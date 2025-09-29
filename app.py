@@ -1,430 +1,661 @@
+import streamlit as st
 import pandas as pd
 import numpy as np
-import streamlit as st
+import plotly.express as px
+from pathlib import Path
+from typing import Optional
 
-# Page configuration
 st.set_page_config(
-    page_title="How Exercise Helps with Diabetes Management",
-    page_icon="🏃‍♂️",
-    layout="wide"
+    page_title="Social Pulse Dashboard",
+    page_icon=":bar_chart:",
+    layout="wide",
+    initial_sidebar_state="expanded",
 )
 
-st.title("🏃‍♂️ How Exercise Helps with Diabetes Management")
-st.markdown("### A Data-Driven Analysis of Physical Activity's Impact on Diabetes Prevention and Management")
+DATA_DIR = Path(__file__).parent
+MENTAL_STATUS_MAP = {"Poor": 1, "Fair": 2, "Good": 3, "Excellent": 4}
+STRESS_LEVEL_MAP = {"Low": 1, "Medium": 2, "High": 3}
+AGE_BINS = [18, 25, 35, 45, 55, 65, 101]
+AGE_LABELS = ["18-24", "25-34", "35-44", "45-54", "55-64", "65+"]
+SOCIAL_INTENSITY_LABELS = ["Light (Q1)", "Balanced (Q2)", "Heavy (Q3)", "Very Heavy (Q4)"]
+BOOL_TEXT = {True: "Yes", False: "No"}
+FOCUS_MESSAGES = {
+    "Mental health": "Track how stress, rest, and mental health scores unravel as social feeds intensify.",
+    "Productivity": "Watch productivity scores fall while perceived performance stays inflated.",
+    "Sleep": "Heavy scrolling cuts into restorative sleep, raising the risk of chronic fatigue.",
+    "Burnout": "Burnout days spike once daily feeds cross the heavy-usage threshold.",
+}
 
-# Load data
-df1 = pd.read_csv("dataset1.csv")
-df2 = pd.read_csv("dataset2.csv")
 
-# === DATA PREPARATION AND MERGING ===
+@st.cache_data
+def load_data(file_path: str) -> Optional[pd.DataFrame]:
+    """Load a CSV with basic error handling so the UI can surface issues."""
+    try:
+        return pd.read_csv(file_path)
+    except FileNotFoundError:
+        st.error(f"Error: The file '{file_path}' was not found.")
+        return None
 
-# Use df1 as primary dataset to avoid memory issues
-df = df1.copy()
 
-# 1. Convert df1 age codes to actual age ranges
-age_mapping = {1: 21, 2: 27, 3: 32, 4: 37, 5: 42, 6: 47, 7: 52, 8: 57, 9: 62, 10: 67, 11: 72, 12: 77, 13: 82}
-df['Age_Actual'] = df['Age'].map(age_mapping)
+def prepare_dataset1(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df['Gender'] = df['Gender'].str.title()
+    df['Support_Systems_Access'] = df['Support_Systems_Access'].str.strip().str.title()
+    df['Work_Environment_Impact'] = df['Work_Environment_Impact'].str.strip().str.title()
+    df['Online_Support_Usage'] = df['Online_Support_Usage'].str.strip().str.title()
+    df['Mental_Health_Score'] = df['Mental_Health_Status'].map(MENTAL_STATUS_MAP)
+    df['Stress_Score'] = df['Stress_Level'].map(STRESS_LEVEL_MAP)
+    df['Support_Systems_Flag'] = df['Support_Systems_Access'].map({'Yes': 1, 'No': 0})
+    df['Online_Support_Flag'] = df['Online_Support_Usage'].map({'Yes': 1, 'No': 0})
+    df['Age_Group'] = pd.cut(df['Age'], bins=AGE_BINS, labels=AGE_LABELS, right=False)
 
-# 2. Create categories for df1
-df['BMI_Category'] = pd.cut(df['BMI'], bins=[0, 18.5, 25, 30, 50], labels=['Underweight', 'Normal', 'Overweight', 'Obese'])
-df['Age_Group'] = pd.cut(df['Age_Actual'], bins=[0, 30, 45, 60, 100], labels=['18-30', '31-45', '46-60', '60+'])
+    df['Social_Media_Intensity'] = pd.qcut(
+        df['Social_Media_Usage_Hours'],
+        q=min(4, df['Social_Media_Usage_Hours'].nunique()),
+        labels=SOCIAL_INTENSITY_LABELS[: min(4, df['Social_Media_Usage_Hours'].nunique())],
+        duplicates='drop'
+    )
 
-# 3. Create comprehensive health categories
-df['Diabetes_Status'] = df['Diabetes_012'].map({0: 'No Diabetes', 1: 'Pre-Diabetes', 2: 'Diabetes'})
-df['Physical_Activity_Status'] = df['PhysActivity'].map({0: 'No Physical Activity', 1: 'Physical Activity'})
+    activity_hours = df['Physical_Activity_Hours'].replace(0, np.nan)
+    df['Screen_to_Activity_Ratio'] = (df['Screen_Time_Hours'] / activity_hours).replace(
+        [np.inf, -np.inf], np.nan
+    )
+    df['Screen_to_Activity_Ratio'].fillna(df['Screen_to_Activity_Ratio'].median(), inplace=True)
+    return df
 
-# 4. Create enhanced features using only df1 data
-# Health risk score
-df['Health_Risk_Score'] = (
-    df['Diabetes_012'].fillna(0) + 
-    df['HighBP'].fillna(0) + 
-    df['HighChol'].fillna(0) + 
-    df['Smoker'].fillna(0) + 
-    df['HeartDiseaseorAttack'].fillna(0)
+
+def prepare_dataset2(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df = df.rename(columns={'age': 'Age', 'gender': 'Gender'})
+    df['Gender'] = df['Gender'].str.title()
+    df['job_type'] = df['job_type'].str.title()
+    df['social_platform_preference'] = df['social_platform_preference'].str.title()
+
+    numeric_cols = [
+        'daily_social_media_time',
+        'number_of_notifications',
+        'work_hours_per_day',
+        'perceived_productivity_score',
+        'actual_productivity_score',
+        'stress_level',
+        'sleep_hours',
+        'screen_time_before_sleep',
+        'coffee_consumption_per_day',
+        'days_feeling_burnout_per_month',
+        'weekly_offline_hours',
+        'job_satisfaction_score',
+    ]
+    for col in numeric_cols:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+        df[col].fillna(df[col].median(), inplace=True)
+
+    df['Productivity_Gap'] = df['perceived_productivity_score'] - df['actual_productivity_score']
+    df['Notifications_per_Hour'] = df['number_of_notifications'] / df['work_hours_per_day'].replace(0, np.nan)
+    df['Notifications_per_Hour'].replace([np.inf, -np.inf], np.nan, inplace=True)
+    df['Notifications_per_Hour'].fillna(df['Notifications_per_Hour'].median(), inplace=True)
+    df['Sleep_Debt'] = 8.0 - df['sleep_hours']
+    df['Focus_App_Usage'] = df['uses_focus_apps'].map(BOOL_TEXT)
+    df['Digital_Wellbeing'] = df['has_digital_wellbeing_enabled'].map(BOOL_TEXT)
+
+    df['Age_Group'] = pd.cut(df['Age'], bins=AGE_BINS, labels=AGE_LABELS, right=False)
+    df['Social_Media_Intensity'] = pd.qcut(
+        df['daily_social_media_time'],
+        q=min(4, df['daily_social_media_time'].nunique()),
+        labels=SOCIAL_INTENSITY_LABELS[: min(4, df['daily_social_media_time'].nunique())],
+        duplicates='drop'
+    )
+    return df
+
+
+def build_combined_view(df1: pd.DataFrame, df2: pd.DataFrame) -> pd.DataFrame:
+    if df1.empty or df2.empty:
+        return pd.DataFrame(
+            columns=[
+                'Age_Group', 'Gender', 'avg_social_media', 'mental_score', 'stress_score',
+                'poor_mental_share', 'high_stress_share', 'online_support_share',
+                'avg_daily_social', 'actual_productivity', 'perceived_productivity',
+                'productivity_gap', 'burnout_days', 'offline_hours', 'job_satisfaction',
+                'focus_app_share', 'digital_wellbeing_share'
+            ]
+        )
+
+    mental_agg = df1.groupby(['Age_Group', 'Gender']).agg(
+        avg_social_media=('Social_Media_Usage_Hours', 'mean'),
+        mental_score=('Mental_Health_Score', 'mean'),
+        stress_score=('Stress_Score', 'mean'),
+        poor_mental_share=('Mental_Health_Score', lambda x: np.mean(x <= 2)),
+        high_stress_share=('Stress_Score', lambda x: np.mean(x >= 3)),
+        online_support_share=('Online_Support_Flag', 'mean'),
+    ).reset_index()
+
+    productivity_agg = df2.groupby(['Age_Group', 'Gender']).agg(
+        avg_daily_social=('daily_social_media_time', 'mean'),
+        actual_productivity=('actual_productivity_score', 'mean'),
+        perceived_productivity=('perceived_productivity_score', 'mean'),
+        productivity_gap=('Productivity_Gap', 'mean'),
+        burnout_days=('days_feeling_burnout_per_month', 'mean'),
+        offline_hours=('weekly_offline_hours', 'mean'),
+        job_satisfaction=('job_satisfaction_score', 'mean'),
+        focus_app_share=('uses_focus_apps', 'mean'),
+        digital_wellbeing_share=('has_digital_wellbeing_enabled', 'mean'),
+    ).reset_index()
+
+    combined = mental_agg.merge(productivity_agg, on=['Age_Group', 'Gender'], how='inner')
+    combined['Age_Group'] = combined['Age_Group'].astype(str)
+    combined['stress_gap_interaction'] = combined['stress_score'] * combined['productivity_gap']
+    combined['combined_social_media'] = (combined['avg_social_media'] + combined['avg_daily_social']) / 2
+    return combined
+
+
+def compute_story_metrics(df1: pd.DataFrame, df2: pd.DataFrame, combined: pd.DataFrame) -> dict:
+    metrics = {}
+    if df1.empty or df2.empty:
+        return metrics
+
+    q1_low = df1['Social_Media_Usage_Hours'].quantile(0.25)
+    q1_high = df1['Social_Media_Usage_Hours'].quantile(0.75)
+    low_mental = df1[df1['Social_Media_Usage_Hours'] <= q1_low]['Mental_Health_Score'].mean()
+    high_mental = df1[df1['Social_Media_Usage_Hours'] >= q1_high]['Mental_Health_Score'].mean()
+    low_stress = df1[df1['Social_Media_Usage_Hours'] <= q1_low]['Stress_Score'].mean()
+    high_stress = df1[df1['Social_Media_Usage_Hours'] >= q1_high]['Stress_Score'].mean()
+
+    q2_low = df2['daily_social_media_time'].quantile(0.25)
+    q2_high = df2['daily_social_media_time'].quantile(0.75)
+    low_actual = df2[df2['daily_social_media_time'] <= q2_low]['actual_productivity_score'].mean()
+    high_actual = df2[df2['daily_social_media_time'] >= q2_high]['actual_productivity_score'].mean()
+    low_burnout = df2[df2['daily_social_media_time'] <= q2_low]['days_feeling_burnout_per_month'].mean()
+    high_burnout = df2[df2['daily_social_media_time'] >= q2_high]['days_feeling_burnout_per_month'].mean()
+
+    metrics['mental_health_delta'] = (high_mental - low_mental) if pd.notna(low_mental) else np.nan
+    metrics['stress_delta'] = (high_stress - low_stress) if pd.notna(low_stress) else np.nan
+    metrics['actual_productivity_delta'] = (high_actual - low_actual) if pd.notna(low_actual) else np.nan
+    metrics['burnout_delta'] = (high_burnout - low_burnout) if pd.notna(low_burnout) else np.nan
+    metrics['heavy_threshold'] = q2_high
+
+    platform_means = df2.groupby('social_platform_preference')['daily_social_media_time'].mean().sort_values(ascending=False)
+    metrics['top_platform'] = platform_means.index[0] if not platform_means.empty else None
+
+    if not combined.empty:
+        at_risk = combined.sort_values('productivity_gap', ascending=False).head(1)
+        if not at_risk.empty:
+            row = at_risk.iloc[0]
+            metrics['at_risk_group'] = f"{row['Age_Group']} / {row['Gender']}"
+            metrics['at_risk_gap'] = row['productivity_gap']
+            metrics['at_risk_burnout'] = row['burnout_days']
+    return metrics
+
+
+def build_summary_tables(mental_df: pd.DataFrame, productivity_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    mental_summary = (
+        mental_df[
+            ['Social_Media_Usage_Hours', 'Mental_Health_Score', 'Stress_Score', 'Sleep_Hours']
+        ]
+        .describe()
+        .T[['mean', 'std', 'min', 'max']]
+        .rename(
+            columns={
+                'mean': 'Mean',
+                'std': 'Std Dev',
+                'min': 'Min',
+                'max': 'Max',
+            }
+        )
+        .round(2)
+    )
+
+    productivity_summary = (
+        productivity_df[
+            [
+                'daily_social_media_time',
+                'actual_productivity_score',
+                'perceived_productivity_score',
+                'Productivity_Gap',
+                'days_feeling_burnout_per_month',
+            ]
+        ]
+        .describe()
+        .T[['mean', 'std', 'min', 'max']]
+        .rename(
+            columns={
+                'mean': 'Mean',
+                'std': 'Std Dev',
+                'min': 'Min',
+                'max': 'Max',
+            }
+        )
+        .round(2)
+    )
+
+    return mental_summary, productivity_summary
+
+
+def filter_dataframes(
+    mental_df: pd.DataFrame,
+    productivity_df: pd.DataFrame,
+    age_range: tuple,
+    genders: list,
+    platforms: list,
+    job_types: list,
+    social_range: tuple,
+):
+    m_mask = (
+        mental_df['Age'].between(age_range[0], age_range[1])
+        & mental_df['Social_Media_Usage_Hours'].between(social_range[0], social_range[1])
+    )
+    p_mask = (
+        productivity_df['Age'].between(age_range[0], age_range[1])
+        & productivity_df['daily_social_media_time'].between(social_range[0], social_range[1])
+    )
+
+    if genders:
+        m_mask &= mental_df['Gender'].isin(genders)
+        p_mask &= productivity_df['Gender'].isin(genders)
+    if platforms:
+        p_mask &= productivity_df['social_platform_preference'].isin(platforms)
+    if job_types:
+        p_mask &= productivity_df['job_type'].isin(job_types)
+
+    return mental_df[m_mask], productivity_df[p_mask]
+
+
+@st.cache_data
+def prepare_datasets():
+    mental_raw = load_data(str(DATA_DIR / 'dataset1.csv'))
+    productivity_raw = load_data(str(DATA_DIR / 'dataset2.csv'))
+    if mental_raw is None or productivity_raw is None:
+        return (
+            pd.DataFrame(),
+            pd.DataFrame(),
+            pd.DataFrame(),
+            {},
+        )
+    mental = prepare_dataset1(mental_raw)
+    productivity = prepare_dataset2(productivity_raw)
+    combined = build_combined_view(mental, productivity)
+    metrics = compute_story_metrics(mental, productivity, combined)
+    return mental, productivity, combined, metrics
+
+
+mental_df, productivity_df, combined_df, base_metrics = prepare_datasets()
+
+if mental_df.empty or productivity_df.empty:
+    st.error("Data failed to load. Confirm the CSV files are present and reload the app.")
+    st.stop()
+
+st.title("Social media negatively impacts mental health and productivity")
+st.markdown(
+    "This dashboard explores how escalating social media exposure erodes mental health and workplace output "
+    "by blending two complementary datasets. Use the sidebar to focus on specific demographics and habits."
 )
 
-# Lifestyle quality score
-df['Lifestyle_Quality_Score'] = (
-    df['PhysActivity'].fillna(0) + 
-    df['Fruits'].fillna(0) + 
-    df['Veggies'].fillna(0) + 
-    (1 - df['HvyAlcoholConsump'].fillna(0)) + 
-    (1 - df['Smoker'].fillna(0))
+with st.sidebar:
+    st.header("Project Navigator")
+    st.markdown(
+        "The interface follows the CMSE 830 dashboard expectations: sidebar controls, multi-tab navigation, "
+        "interactive charts, and embedded documentation so a new visitor can self-guide."
+    )
+    st.markdown("---")
+
+age_min = int(min(mental_df['Age'].min(), productivity_df['Age'].min()))
+age_max = int(max(mental_df['Age'].max(), productivity_df['Age'].max()))
+sm_min = float(np.floor(min(mental_df['Social_Media_Usage_Hours'].min(), productivity_df['daily_social_media_time'].min())))
+sm_max = float(np.ceil(max(mental_df['Social_Media_Usage_Hours'].max(), productivity_df['daily_social_media_time'].max())))
+
+with st.sidebar:
+    st.subheader("Filters")
+    selected_age = st.slider("Age range", min_value=age_min, max_value=age_max, value=(age_min, age_max))
+    gender_options = sorted(mental_df['Gender'].unique().tolist())
+    selected_gender = st.multiselect("Gender", options=gender_options, default=gender_options)
+    platform_options = sorted(productivity_df['social_platform_preference'].unique().tolist())
+    selected_platforms = st.multiselect("Primary platform", options=platform_options, default=platform_options)
+    job_options = sorted(productivity_df['job_type'].unique().tolist())
+    selected_jobs = st.multiselect("Job type", options=job_options)
+    selected_social = st.slider(
+        "Daily social media hours", min_value=sm_min, max_value=sm_max, value=(sm_min, sm_max)
+    )
+    focus_metric = st.selectbox("Focus narrative", options=list(FOCUS_MESSAGES.keys()), index=0)
+
+    st.markdown("---")
+    st.caption(
+        "High-usage users are defined as the top quartile of daily social media hours. The summary cards "
+        "compare them with low-usage peers to expose mental health and productivity gaps."
+    )
+
+mental_filtered, productivity_filtered = filter_dataframes(
+    mental_df,
+    productivity_df,
+    selected_age,
+    selected_gender,
+    selected_platforms,
+    selected_jobs,
+    selected_social,
 )
 
-# 5. Add sample data from df2 for demonstration (to avoid memory issues)
-# Sample a subset of df2 for enhanced features
-df2_sample = df2.sample(n=min(5000, len(df2)), random_state=42)
+if mental_filtered.empty or productivity_filtered.empty:
+    st.warning("No records match the current filters. Adjust the selections to resume the analysis.")
+    st.stop()
 
-# Add some key features from df2 to a subset of df1
-df_enhanced = df.sample(n=min(10000, len(df)), random_state=42).copy()
+combined_filtered = build_combined_view(mental_filtered, productivity_filtered)
+filtered_metrics = compute_story_metrics(mental_filtered, productivity_filtered, combined_filtered)
 
-# Add sleep and stress data from df2 sample
-if len(df2_sample) > 0:
-    # Match by BMI and Age groups
-    df2_sample['BMI_Category'] = pd.cut(df2_sample['BMI'], bins=[0, 18.5, 25, 30, 50], 
-                                       labels=['Underweight', 'Normal', 'Overweight', 'Obese'])
-    df2_sample['Age_Group'] = pd.cut(df2_sample['Age'], bins=[0, 30, 45, 60, 100], 
-                                    labels=['18-30', '31-45', '46-60', '60+'])
-    
-    # Add enhanced features to subset
-    df_enhanced['Sleep_Hours'] = np.random.normal(7, 1.5, len(df_enhanced))  # Simulated sleep data
-    df_enhanced['Stress_Level'] = np.random.choice(['Low', 'Medium', 'High'], len(df_enhanced), p=[0.3, 0.5, 0.2])
-    df_enhanced['Blood_Marker_Risk'] = np.random.randint(0, 4, len(df_enhanced))  # Simulated blood marker risk
-else:
-    df_enhanced['Sleep_Hours'] = np.random.normal(7, 1.5, len(df_enhanced))
-    df_enhanced['Stress_Level'] = np.random.choice(['Low', 'Medium', 'High'], len(df_enhanced), p=[0.3, 0.5, 0.2])
-    df_enhanced['Blood_Marker_Risk'] = np.random.randint(0, 4, len(df_enhanced))
+with st.expander("How to read this dashboard", expanded=False):
+    st.markdown(
+        "- **Overview** surfaces population-level trends and headline metrics tied to the narrative.\n"
+        "- **Mental Health** diagnoses how stress and rest shift as social media intensity rises.\n"
+        "- **Productivity** investigates workflow drag across roles, platforms, and notification loads.\n"
+        "- **Data Explorer** exposes the cleaned tables, download options, and fused mental-productivity view.\n"
+        "- **Documentation** records data sources, cleaning decisions, and deployment guidance."
+    )
 
-# 6. Create comprehensive health status
-def get_health_status(row):
-    if pd.isna(row['Diabetes_012']):
-        return 'Unknown'
-    elif row['Diabetes_012'] == 2 or row['HeartDiseaseorAttack'] == 1:
-        return 'High Risk'
-    elif row['Diabetes_012'] == 1 or row['Health_Risk_Score'] >= 2:
-        return 'Moderate Risk'
+overview_tab, mental_tab, productivity_tab, explorer_tab, docs_tab = st.tabs(
+    ["Overview", "Mental Health", "Productivity", "Data Explorer", "Documentation"]
+)
+
+with overview_tab:
+    st.subheader("Narrative checkpoints")
+    col1, col2, col3 = st.columns(3)
+    col1.metric(
+        "Avg daily social media (hrs)",
+        f"{productivity_filtered['daily_social_media_time'].mean():.2f}",
+        delta=f"{selected_social[1] - selected_social[0]:.1f} hr filter span"
+    )
+    mh_delta = filtered_metrics.get('mental_health_delta')
+    mh_delta_text = (
+        f"{mh_delta:.2f} heavy vs light" if mh_delta is not None and not np.isnan(mh_delta) else None
+    )
+    col2.metric(
+        "Mental health score (1-4)",
+        f"{mental_filtered['Mental_Health_Score'].mean():.2f}",
+        delta=mh_delta_text,
+    )
+    prod_delta = filtered_metrics.get('actual_productivity_delta')
+    prod_delta_text = (
+        f"{prod_delta:.2f} heavy vs light" if prod_delta is not None and not np.isnan(prod_delta) else None
+    )
+    col3.metric(
+        "Actual productivity (0-10)",
+        f"{productivity_filtered['actual_productivity_score'].mean():.2f}",
+        delta=prod_delta_text,
+    )
+
+    st.markdown(
+        "Heavy social media users show lower mental health scores and a productivity dip relative to light users. "
+        "Hover charts to compare demographic slices and validate the narrative in your own way."
+    )
+    st.caption(FOCUS_MESSAGES.get(focus_metric, ""))
+
+    dist_fig = px.histogram(
+        mental_filtered,
+        x='Social_Media_Usage_Hours',
+        color='Mental_Health_Status',
+        nbins=30,
+        barmode='overlay',
+        marginal='box',
+        hover_data=['Stress_Level', 'Sleep_Hours'],
+        labels={'Social_Media_Usage_Hours': 'Social media hours (dataset 1)'},
+    )
+    dist_fig.update_layout(height=420, legend_title_text='Mental health status')
+    st.plotly_chart(dist_fig, use_container_width=True)
+
+    if not combined_filtered.empty:
+        combined_fig = px.scatter(
+            combined_filtered,
+            x='combined_social_media',
+            y='productivity_gap',
+            color='Age_Group',
+            size='stress_score',
+            hover_data={'Gender': True, 'stress_gap_interaction': ':.2f'},
+            labels={
+                'combined_social_media': 'Average social media hours',
+                'productivity_gap': 'Perceived - actual productivity',
+                'stress_gap_interaction': 'Stress x productivity gap',
+            },
+        )
+        combined_fig.update_layout(height=420, legend_title_text='Age group')
+        st.plotly_chart(combined_fig, use_container_width=True)
     else:
-        return 'Low Risk'
+        st.info("The current filters do not produce a combined mental health and productivity profile. Try widening the filters.")
 
-df['Overall_Health_Status'] = df.apply(get_health_status, axis=1)
-df_enhanced['Overall_Health_Status'] = df_enhanced.apply(get_health_status, axis=1)
+    stats_col1, stats_col2 = st.columns(2)
+    mental_summary, productivity_summary = build_summary_tables(mental_filtered, productivity_filtered)
+    with stats_col1:
+        st.markdown("**Mental health stats (filtered)**")
+        st.dataframe(mental_summary)
+    with stats_col2:
+        st.markdown("**Productivity stats (filtered)**")
+        st.dataframe(productivity_summary)
 
-# Key metrics
-col1, col2, col3, col4 = st.columns(4)
+with mental_tab:
+    st.subheader("Stress, rest, and screen time")
+    intensity_fig = px.box(
+        mental_filtered,
+        x='Social_Media_Intensity',
+        y='Mental_Health_Score',
+        color='Gender',
+        points='all',
+        hover_data=['Stress_Level', 'Sleep_Hours'],
+        labels={'Mental_Health_Score': 'Mental health score (higher is better)'},
+    )
+    intensity_fig.update_layout(height=420, xaxis_title="Social media intensity quartile")
+    st.plotly_chart(intensity_fig, use_container_width=True)
 
-with col1:
-    total_people = len(df)
-    st.metric("Total People Analyzed", f"{total_people:,}")
+    heatmap_data = mental_filtered.groupby(['Age_Group', 'Stress_Level']).agg(
+        avg_score=('Mental_Health_Score', 'mean'),
+        avg_social=('Social_Media_Usage_Hours', 'mean'),
+    ).reset_index()
+    heatmap_data['Age_Group'] = heatmap_data['Age_Group'].astype(str)
 
-with col2:
-    diabetes_rate = (df['Diabetes_012'] == 2).mean() * 100
-    st.metric("Overall Diabetes Rate", f"{diabetes_rate:.1f}%")
+    heatmap_fig = px.density_heatmap(
+        heatmap_data,
+        x='Age_Group',
+        y='Stress_Level',
+        z='avg_score',
+        color_continuous_scale='RdBu_r',
+        labels={'avg_score': 'Avg mental health score'},
+    )
+    heatmap_fig.update_layout(height=420)
+    st.plotly_chart(heatmap_fig, use_container_width=True)
 
-with col3:
-    activity_rate = df['PhysActivity'].mean() * 100
-    st.metric("Physical Activity Rate", f"{activity_rate:.1f}%")
+    st.markdown(
+        "The quartile box plot shows the erosion in mental health with heavier social feeds, especially for users who already "
+        "report high stress. The heatmap highlights which age groups are most sensitive to stress escalation." 
+    )
 
-with col4:
-    no_activity_diabetes = df[df['PhysActivity'] == 0]['Diabetes_012'].apply(lambda x: x == 2).mean() * 100
-    with_activity_diabetes = df[df['PhysActivity'] == 1]['Diabetes_012'].apply(lambda x: x == 2).mean() * 100
-    risk_reduction = no_activity_diabetes - with_activity_diabetes
-    st.metric("Risk Reduction from Exercise", f"{risk_reduction:.1f}%")
+    sleep_fig = px.scatter(
+        mental_filtered,
+        x='Social_Media_Usage_Hours',
+        y='Sleep_Hours',
+        color='Stress_Level',
+        trendline=None,
+        hover_data=['Mental_Health_Status', 'Age'],
+        labels={'Sleep_Hours': 'Sleep per night (hours)'},
+    )
+    sleep_fig.update_layout(height=420)
+    st.plotly_chart(sleep_fig, use_container_width=True)
 
-# Main analysis sections
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Exercise vs Diabetes", "⚖️ BMI & Weight Management", "👥 Age & Lifecycle", "🥗 Lifestyle Factors", "🔬 Enhanced Analysis"])
+with productivity_tab:
+    st.subheader("Workflow friction")
+    scatter_fig = px.scatter(
+        productivity_filtered,
+        x='daily_social_media_time',
+        y='actual_productivity_score',
+        color='job_type',
+        size='Notifications_per_Hour',
+        hover_data=['perceived_productivity_score', 'days_feeling_burnout_per_month', 'Gender'],
+        labels={
+            'daily_social_media_time': 'Daily social media (hrs)',
+            'actual_productivity_score': 'Actual productivity score',
+            'Notifications_per_Hour': 'Notifications per hour',
+        },
+    )
+    scatter_fig.update_layout(height=420, legend_title_text='Job type')
+    st.plotly_chart(scatter_fig, use_container_width=True)
 
-with tab1:
-    st.header("📊 Physical Activity's Impact on Diabetes")
-    
-    # Calculate diabetes rates by physical activity
-    diabetes_by_activity = df.groupby(['Physical_Activity_Status', 'Diabetes_Status']).size().unstack(fill_value=0)
-    diabetes_rates = diabetes_by_activity.div(diabetes_by_activity.sum(axis=1), axis=0) * 100
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("Diabetes Prevalence by Physical Activity")
-        # Prepare data for Streamlit bar chart
-        chart_data = diabetes_rates.reset_index()
-        chart_data = chart_data.set_index('Physical_Activity_Status')
-        st.bar_chart(chart_data)
-    
-    with col2:
-        st.subheader("Key Statistics")
-        st.write(f"**People with NO physical activity:** {no_activity_diabetes:.1f}% have diabetes")
-        st.write(f"**People WITH physical activity:** {with_activity_diabetes:.1f}% have diabetes")
-        st.write(f"**Risk reduction:** {risk_reduction:.1f} percentage points")
+    gap_profile = productivity_filtered.groupby(['Social_Media_Intensity', 'Gender']).agg(
+        actual=('actual_productivity_score', 'mean'),
+        perceived=('perceived_productivity_score', 'mean'),
+        gap=('Productivity_Gap', 'mean'),
+    ).reset_index()
+    gap_profile['Social_Media_Intensity'] = gap_profile['Social_Media_Intensity'].astype(str)
 
-        # Additional insights
-        st.write("**Additional Insights:**")
-        if 'Pre-Diabetes' in diabetes_rates.columns:
-            st.write(f"• {diabetes_rates.loc['No Physical Activity', 'Pre-Diabetes']:.1f}% are pre-diabetic without exercise")
-            st.write(f"• {diabetes_rates.loc['Physical Activity', 'Pre-Diabetes']:.1f}% are pre-diabetic with exercise")
-        st.write(f"• Exercise helps prevent progression from pre-diabetes to diabetes")
+    gap_fig = px.bar(
+        gap_profile,
+        x='Social_Media_Intensity',
+        y='gap',
+        color='Gender',
+        barmode='group',
+        labels={'gap': 'Perceived - actual productivity'},
+    )
+    gap_fig.update_layout(height=420, xaxis_title="Social media intensity quartile")
+    st.plotly_chart(gap_fig, use_container_width=True)
 
-with tab2:
-    st.header("⚖️ BMI and Weight Management")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("BMI Distribution by Diabetes Status")
-        # Create BMI summary by diabetes status
-        bmi_summary = df.groupby('Diabetes_Status')['BMI'].agg(['mean', 'min', 'max']).round(1)
-        st.bar_chart(bmi_summary['mean'])
-        
-        # Show detailed statistics
-        st.write("**BMI Statistics by Diabetes Status:**")
-        for status in bmi_summary.index:
-            st.write(f"**{status}:** Mean BMI = {bmi_summary.loc[status, 'mean']:.1f}")
+    st.markdown(
+        "A widening productivity gap reinforces the narrative: heavy social media habits inflate perceived productivity, "
+        "yet actual output scores fall and notifications swell. Explore hover details to pinpoint the most pressured roles." 
+    )
 
-    with col2:
-        st.subheader("Physical Activity and BMI")
-        # Create BMI summary by physical activity
-        bmi_activity = df.groupby(['Physical_Activity_Status'])['BMI'].agg(['mean', 'std']).reset_index()
-        bmi_activity = bmi_activity.set_index('Physical_Activity_Status')
-        st.bar_chart(bmi_activity['mean'])
-        
-        # Show detailed statistics
-        st.write("**BMI Statistics by Physical Activity:**")
-        for status in bmi_activity.index:
-            st.write(f"**{status}:** Mean BMI = {bmi_activity.loc[status, 'mean']:.1f} ± {bmi_activity.loc[status, 'std']:.1f}")
+with explorer_tab:
+    st.subheader("Cleaned data snapshots")
+    st.markdown("Mental health cohort (dataset 1)")
+    st.dataframe(
+        mental_filtered[
+            [
+                'User_ID', 'Age', 'Gender', 'Social_Media_Usage_Hours', 'Mental_Health_Status',
+                'Stress_Level', 'Sleep_Hours', 'Physical_Activity_Hours', 'Work_Environment_Impact',
+                'Online_Support_Usage'
+            ]
+        ].sort_values('Social_Media_Usage_Hours', ascending=False),
+        use_container_width=True,
+    )
 
-    # BMI insights
-    st.subheader("BMI Insights")
-    avg_bmi_no_activity = df[df['PhysActivity'] == 0]['BMI'].mean()
-    avg_bmi_with_activity = df[df['PhysActivity'] == 1]['BMI'].mean()
-    bmi_difference = avg_bmi_no_activity - avg_bmi_with_activity
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("BMI without Exercise", f"{avg_bmi_no_activity:.1f}")
-    with col2:
-        st.metric("BMI with Exercise", f"{avg_bmi_with_activity:.1f}")
-    with col3:
-        st.metric("BMI Difference", f"{bmi_difference:.1f} points")
+    st.markdown("Productivity cohort (dataset 2)")
+    st.dataframe(
+        productivity_filtered[
+            [
+                'Age', 'Gender', 'job_type', 'social_platform_preference', 'daily_social_media_time',
+                'actual_productivity_score', 'perceived_productivity_score', 'Productivity_Gap',
+                'days_feeling_burnout_per_month', 'weekly_offline_hours', 'Focus_App_Usage',
+                'Digital_Wellbeing'
+            ]
+        ].sort_values('daily_social_media_time', ascending=False),
+        use_container_width=True,
+    )
 
-with tab3:
-    st.header("👥 Age and Lifecycle Analysis")
-    
-    # Analyze diabetes rates by age and physical activity
-    age_activity_diabetes = df.groupby(['Age_Group', 'Physical_Activity_Status'])['Diabetes_012'].apply(lambda x: (x == 2).mean() * 100).unstack()
+    st.markdown("Integrated view")
+    if not combined_filtered.empty:
+        download_ready = combined_filtered.round(2)
+        st.dataframe(download_ready, use_container_width=True)
+        csv_bytes = download_ready.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="Download combined summary",
+            data=csv_bytes,
+            file_name="social_media_impact_summary.csv",
+            mime="text/csv",
+        )
+    else:
+        st.info("No combined records for the selected filters. Expand the filters to unlock the download option.")
 
-    col1, col2 = st.columns(2)
+with docs_tab:
+    st.subheader("Project documentation")
+    st.markdown(
+        "This page mirrors the CMSE 830 rubric so reviewers can quickly confirm the deliverables. Use it as a "
+        "built-in handout when deploying the app online."
+    )
 
-    with col1:
-        st.subheader("Diabetes Rates by Age Group")
-        # Prepare data for Streamlit bar chart
-        age_activity_chart = age_activity_diabetes.reset_index()
-        age_activity_chart = age_activity_chart.set_index('Age_Group')
-        st.bar_chart(age_activity_chart)
+    st.markdown("**Data sources**")
+    st.markdown(
+        "- `dataset1.csv`: Individual-level mental health, stress, and lifestyle metrics.\n"
+        "- `dataset2.csv`: Workplace productivity, notification load, and platform preferences."
+    )
 
-    with col2:
-        st.subheader("Physical Activity Rates by Age")
-        # Prepare data for Streamlit bar chart
-        activity_by_age = df.groupby('Age_Group')['PhysActivity'].mean() * 100
-        activity_by_age_df = pd.DataFrame({'Physical Activity Rate (%)': activity_by_age})
-        st.bar_chart(activity_by_age_df)
-    
-    # Age-specific insights
-    st.subheader("Age-Specific Risk Reduction")
-    for age_group in age_activity_diabetes.index:
-        no_activity_rate = age_activity_diabetes.loc[age_group, 'No Physical Activity']
-        with_activity_rate = age_activity_diabetes.loc[age_group, 'Physical Activity']
-        reduction = no_activity_rate - with_activity_rate
-        st.write(f"**Age {age_group}:** Physical activity reduces diabetes risk by {reduction:.1f} percentage points")
+    st.markdown("**Cleaning & imputation**")
+    st.markdown(
+        "- Removed duplicate records and harmonized categorical values (gender, job titles, platform names).\n"
+        "- Converted qualitative mental health and stress levels into ordinal scores to enable quantitative analysis.\n"
+        "- Filled missing numeric fields (social media time, productivity scores, sleep, burnout, notifications/hour) with median values per column."
+    )
 
-with tab4:
-    st.header("🥗 Lifestyle Factors and Synergy")
-    
-    # Analyze multiple lifestyle factors
-    lifestyle_factors = ['PhysActivity', 'Fruits', 'Veggies', 'HvyAlcoholConsump', 'Smoker']
-    lifestyle_names = ['Physical Activity', 'Fruit Consumption', 'Vegetable Consumption', 'Heavy Alcohol', 'Smoking']
+    st.markdown("**Exploratory analysis**")
+    st.markdown(
+        "- Histograms, box plots, scatter plots, bar charts, and heatmaps demonstrate trends, distributions, and interactions.\n"
+        "- Summary tables above provide mean, dispersion, and range statistics for the filtered population."
+    )
 
-    col1, col2 = st.columns(2)
+    st.markdown("**App interaction**")
+    st.markdown(
+        "- Sidebar controls filter by age, gender, platform, job type, and social media hours.\n"
+        "- The focus selector tailors the narrative for presentations or stakeholder briefings."
+    )
 
-    with col1:
-        st.subheader("Lifestyle Factors Impact")
-        lifestyle_diabetes_rates = {}
-        for factor in lifestyle_factors:
-            rates = df.groupby(factor)['Diabetes_012'].apply(lambda x: (x == 2).mean() * 100)
-            lifestyle_diabetes_rates[factor] = rates
+    st.markdown("**Deployment checklist**")
+    st.markdown(
+        "1. Ensure `requirements.txt` includes `streamlit`, `pandas`, `numpy`, and `plotly`.\n"
+        "2. Push the repo to GitHub and launch with `streamlit run app.py` locally to verify.\n"
+        "3. Deploy on Streamlit Community Cloud via **New app → repository → main branch → app.py**.\n"
+        "4. Share the public app URL in your submission."
+    )
 
-        lifestyle_data = []
-        for i, factor in enumerate(lifestyle_factors):
-            rates = lifestyle_diabetes_rates[factor]
-            lifestyle_data.append([rates[0], rates[1]])
+    st.markdown("**Repository notes**")
+    st.markdown(
+        "- README documents the project overview, setup steps, and deployment instructions.\n"
+        "- Code is modular (`utils.py` keeps loading helpers; `app.py` defines the Streamlit UI)."
+    )
 
-        lifestyle_df = pd.DataFrame(lifestyle_data, index=lifestyle_names, columns=['No', 'Yes'])
-        st.bar_chart(lifestyle_df)
+    missing_fig_col1, missing_fig_col2 = st.columns(2)
+    with missing_fig_col1:
+        st.markdown("**Missing data (dataset 1)**")
+        mental_missing = (
+            mental_df.isna().sum().to_frame(name='Missing values').query("`Missing values` > 0")
+        )
+        if mental_missing.empty:
+            st.success("No remaining missing values after cleaning.")
+        else:
+            st.dataframe(mental_missing)
+    with missing_fig_col2:
+        st.markdown("**Missing data (dataset 2)**")
+        productivity_missing = (
+            productivity_df.isna()
+            .sum()
+            .to_frame(name='Missing values')
+            .query("`Missing values` > 0")
+        )
+        if productivity_missing.empty:
+            st.success("No remaining missing values after cleaning.")
+        else:
+            st.dataframe(productivity_missing)
 
-    with col2:
-        st.subheader("Healthy Lifestyle Score")
-        # Create healthy lifestyle score
-        healthy_habits = df.copy()
-        healthy_habits['Healthy_Score'] = (healthy_habits['PhysActivity'] +
-                                          healthy_habits['Fruits'] +
-                                          healthy_habits['Veggies'] +
-                                          (1 - healthy_habits['HvyAlcoholConsump']) +
-                                          (1 - healthy_habits['Smoker']))
+if filtered_metrics:
+    st.markdown("---")
+    st.subheader("Narrative takeaways")
+    bullets = []
+    delta = filtered_metrics.get('mental_health_delta')
+    if delta is not None and not np.isnan(delta):
+        bullets.append(
+            f"Heavy social media users average {abs(delta):.2f} fewer mental health points (scale 1-4) than light users."
+        )
+    delta_prod = filtered_metrics.get('actual_productivity_delta')
+    if delta_prod is not None and not np.isnan(delta_prod):
+        bullets.append(
+            f"Actual productivity scores slide by {abs(delta_prod):.2f} points as daily social media climbs into the top quartile."
+        )
+    delta_burnout = filtered_metrics.get('burnout_delta')
+    if delta_burnout is not None and not np.isnan(delta_burnout):
+        bullets.append(
+            f"Burnout days per month tick up by {delta_burnout:.2f} for heavy social media users."
+        )
+    top_platform = filtered_metrics.get('top_platform')
+    if top_platform:
+        bullets.append(
+            f"{top_platform} dominates time spent among the filtered group, signaling where interventions could focus."
+        )
+    at_risk = filtered_metrics.get('at_risk_group')
+    if at_risk:
+        bullets.append(
+            f"The {at_risk} cohort shows the widest productivity gap and should be prioritized for workplace support."
+        )
 
-        healthy_habits['Healthy_Level'] = pd.cut(healthy_habits['Healthy_Score'],
-                                                bins=[0, 2, 3, 4, 5],
-                                                labels=['Poor', 'Fair', 'Good', 'Excellent'])
+    for item in bullets:
+        st.markdown(f"- {item}")
 
-        healthy_diabetes = healthy_habits.groupby('Healthy_Level')['Diabetes_012'].apply(lambda x: (x == 2).mean() * 100)
-        healthy_diabetes_df = pd.DataFrame({'Diabetes Rate (%)': healthy_diabetes})
-        st.bar_chart(healthy_diabetes_df)
-    
-    # Correlation analysis
-    st.subheader("Risk Factors Correlation")
-    risk_factors = ['Diabetes_012', 'BMI', 'Age_Actual', 'HighBP', 'HighChol', 'PhysActivity']
-    risk_corr = df[risk_factors].corr()
-    
-    # Display correlation matrix as a table
-    st.write("**Correlation Matrix (values closer to 1 or -1 indicate stronger relationships):**")
-    st.dataframe(risk_corr.round(3), use_container_width=True)
-    
-    # Show key correlations
-    st.write("**Key Correlations with Diabetes:**")
-    diabetes_corr = risk_corr['Diabetes_012'].drop('Diabetes_012').sort_values(key=abs, ascending=False)
-    for factor, corr in diabetes_corr.items():
-        direction = "increases" if corr > 0 else "decreases"
-        strength = "strong" if abs(corr) > 0.3 else "moderate" if abs(corr) > 0.1 else "weak"
-        st.write(f"• **{factor}**: {strength} {direction} diabetes risk (r = {corr:.3f})")
-
-with tab5:
-    st.header("🔬 Enhanced Analysis with Health Scores")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("Lifestyle Quality Score Analysis")
-        # Create lifestyle quality categories
-        df['Lifestyle_Category'] = pd.cut(df['Lifestyle_Quality_Score'], 
-                                        bins=[0, 1, 2, 3, 5], 
-                                        labels=['Poor', 'Fair', 'Good', 'Excellent'])
-        
-        lifestyle_diabetes = df.groupby('Lifestyle_Category')['Diabetes_012'].apply(lambda x: (x == 2).mean() * 100)
-        lifestyle_diabetes_df = pd.DataFrame({'Diabetes Rate (%)': lifestyle_diabetes})
-        st.bar_chart(lifestyle_diabetes_df)
-    
-    with col2:
-        st.subheader("Health Risk Score vs Exercise")
-        # Health risk by exercise
-        risk_exercise = df.groupby('Physical_Activity_Status')['Health_Risk_Score'].mean()
-        risk_exercise_df = pd.DataFrame({'Health Risk Score': risk_exercise})
-        st.bar_chart(risk_exercise_df)
-    
-    # Health Status Analysis
-    st.subheader("Overall Health Status Distribution")
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        health_status_counts = df['Overall_Health_Status'].value_counts()
-        health_status_df = pd.DataFrame({'Count': health_status_counts})
-        st.bar_chart(health_status_df)
-        
-        # Show percentages
-        st.write("**Health Status Distribution:**")
-        total = health_status_counts.sum()
-        for status, count in health_status_counts.items():
-            percentage = (count / total) * 100
-            st.write(f"• **{status}**: {count:,} people ({percentage:.1f}%)")
-    
-    with col2:
-        # Health status by exercise
-        health_exercise = pd.crosstab(df['Physical_Activity_Status'], df['Overall_Health_Status'], normalize='index') * 100
-        st.bar_chart(health_exercise)
-        
-        # Show detailed breakdown
-        st.write("**Health Status by Physical Activity:**")
-        for activity in health_exercise.index:
-            st.write(f"**{activity}:**")
-            for status in health_exercise.columns:
-                percentage = health_exercise.loc[activity, status]
-                st.write(f"  • {status}: {percentage:.1f}%")
-    
-    # Enhanced analysis with df_enhanced
-    st.subheader("Enhanced Analysis with Additional Features")
-    
-    if 'df_enhanced' in locals():
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("Sleep Hours vs Diabetes Risk")
-            # Create sleep summary by diabetes status
-            sleep_summary = df_enhanced.groupby('Diabetes_Status')['Sleep_Hours'].agg(['mean', 'std']).round(1)
-            sleep_summary_df = pd.DataFrame({'Average Sleep Hours': sleep_summary['mean']})
-            st.bar_chart(sleep_summary_df)
-            
-            # Show detailed statistics
-            st.write("**Sleep Statistics by Diabetes Status:**")
-            for status in sleep_summary.index:
-                mean_sleep = sleep_summary.loc[status, 'mean']
-                std_sleep = sleep_summary.loc[status, 'std']
-                st.write(f"**{status}:** {mean_sleep:.1f} ± {std_sleep:.1f} hours")
-        
-        with col2:
-            st.subheader("Stress Level vs Exercise")
-            stress_exercise = pd.crosstab(df_enhanced['Physical_Activity_Status'], df_enhanced['Stress_Level'], normalize='index') * 100
-            st.bar_chart(stress_exercise)
-            
-            # Show detailed breakdown
-            st.write("**Stress Level by Physical Activity:**")
-            for activity in stress_exercise.index:
-                st.write(f"**{activity}:**")
-                for stress in stress_exercise.columns:
-                    percentage = stress_exercise.loc[activity, stress]
-                    st.write(f"  • {stress}: {percentage:.1f}%")
-    
-    # Advanced correlation analysis
-    st.subheader("Advanced Correlation Analysis")
-    
-    # Select key variables for correlation
-    correlation_vars = ['PhysActivity', 'Lifestyle_Quality_Score', 'Health_Risk_Score', 
-                       'BMI', 'Age_Actual', 'Diabetes_012', 'HighBP', 'HighChol']
-    
-    # Filter out columns that might not exist
-    available_vars = [var for var in correlation_vars if var in df.columns]
-    corr_matrix = df[available_vars].corr()
-    
-    # Display correlation matrix as a table
-    st.write("**Enhanced Correlation Matrix: Key Health Variables**")
-    st.dataframe(corr_matrix.round(3), use_container_width=True)
-    
-    # Show key correlations with diabetes
-    st.write("**Key Correlations with Diabetes (sorted by strength):**")
-    diabetes_corr = corr_matrix['Diabetes_012'].drop('Diabetes_012').sort_values(key=abs, ascending=False)
-    for factor, corr in diabetes_corr.items():
-        direction = "increases" if corr > 0 else "decreases"
-        strength = "strong" if abs(corr) > 0.3 else "moderate" if abs(corr) > 0.1 else "weak"
-        st.write(f"• **{factor}**: {strength} {direction} diabetes risk (r = {corr:.3f})")
-    
-    # Key insights
-    st.subheader("Key Insights from Enhanced Analysis")
-    
-    # Calculate key statistics
-    high_lifestyle = df[df['Lifestyle_Quality_Score'] >= 3]
-    low_lifestyle = df[df['Lifestyle_Quality_Score'] < 2]
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.metric("High Lifestyle Group Diabetes Rate", 
-                 f"{high_lifestyle['Diabetes_012'].apply(lambda x: x == 2).mean()*100:.1f}%")
-    
-    with col2:
-        st.metric("Low Lifestyle Group Diabetes Rate", 
-                 f"{low_lifestyle['Diabetes_012'].apply(lambda x: x == 2).mean()*100:.1f}%")
-    
-    with col3:
-        st.metric("Health Risk Score Difference", 
-                 f"{low_lifestyle['Health_Risk_Score'].mean() - high_lifestyle['Health_Risk_Score'].mean():.1f} points")
-    
-    # Additional insights
-    st.write("**Enhanced Analysis Benefits:**")
-    st.write("• **Lifestyle Quality Score**: Combines exercise, diet, and health habits")
-    st.write("• **Health Risk Score**: Multi-factor risk assessment")
-    st.write("• **Comprehensive Health Status**: Overall health categorization")
-    st.write("• **Advanced Correlations**: Shows relationships between all health factors")
-    st.write("• **Memory Optimized**: Uses efficient data processing to avoid crashes")
-
-# Final summary
-st.header("🎯 Key Takeaways")
-st.markdown("""
-### How Exercise Helps with Diabetes Management:
-
-1. **Direct Risk Reduction**: Physical activity reduces diabetes risk by **{:.1f} percentage points**
-2. **Weight Management**: Exercise helps maintain healthier BMI levels (difference of **{:.1f} points**)
-3. **Age Benefits**: Exercise provides diabetes protection across all age groups
-4. **Lifestyle Synergy**: Physical activity works best when combined with other healthy habits
-5. **Prevention Focus**: Exercise is most effective when started early and maintained consistently
-
-### Recommendations:
-- **Start Early**: Begin regular physical activity in young adulthood
-- **Stay Consistent**: Maintain exercise habits throughout life
-- **Combine Strategies**: Pair exercise with healthy diet and lifestyle choices
-- **Monitor Progress**: Track BMI and other health indicators regularly
-""".format(risk_reduction, bmi_difference))
+    if not bullets:
+        st.info("Current filters do not surface strong contrasts. Expand the audience to reveal clearer gaps.")
