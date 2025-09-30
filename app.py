@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import plotly.express as px
 from sklearn.impute import SimpleImputer
 
 st.set_page_config(
@@ -69,6 +70,49 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
 
 diabetes_df_clean = clean_data(diabetes_df)
 kidney_df_clean = clean_data(kidney_df)
+
+
+STATUS_MAP = {1: "Has Diabetes", 0: "No Diabetes"}
+KIDNEY_MAP = {1: "Has Kidney Disease", 0: "No Kidney Disease"}
+
+diabetes_labeled = diabetes_df_clean.assign(
+    Dataset="Diabetes",
+    DiabetesStatus=diabetes_df_clean["Diabetes"].map(STATUS_MAP),
+)
+
+kidney_labeled = kidney_df_clean.assign(
+    Dataset="Kidney Disease",
+    DiabetesStatus=kidney_df_clean["Diabetes"].map(STATUS_MAP),
+    KidneyStatus=kidney_df_clean["Kidney Disease"].map(KIDNEY_MAP),
+)
+
+combined_clean = pd.concat(
+    [diabetes_labeled, kidney_labeled],
+    ignore_index=True,
+)
+
+# Binning definitions
+bp_bins = [0, 60, 80, 90, 200]
+bp_labels = ["Low (<60)", "Normal (60-79)", "Elevated (80-89)", "High (90+)"]
+
+glucose_bins = [0, 100, 126, 500]
+glucose_labels = ["Normal (<100)", "Prediabetes (100-125)", "Diabetes (126+)"]
+
+bmi_bins = [0, 18.5, 25, 30, 70]
+bmi_labels = [
+    "Underweight (<18.5)",
+    "Normal (18.5-24.9)",
+    "Overweight (25-29.9)",
+    "Obese (30+)",
+]
+
+age_bins = [0, 18, 40, 60, 100]
+age_labels = [
+    "Child (0-17)",
+    "Young Adult (18-39)",
+    "Middle Age (40-59)",
+    "Senior (60+)",
+]
 
 
 # Two tabs: Dataset 1 (Diabetes) and Dataset 2 (Kidney Disease)
@@ -147,28 +191,7 @@ st.title("Count of Variables")
 
 
 # Helper function to add ranges into labels
-# Helper
-bp_bins = [0, 60, 80, 90, 200]
-bp_labels = ["Low (<60)", "Normal (60–79)", "Elevated (80–89)", "High (90+)"]
-
-glucose_bins = [0, 100, 126, 500]
-glucose_labels = ["Normal (<100)", "Prediabetes (100–125)", "Diabetes (126+)"]
-
-bmi_bins = [0, 18.5, 25, 30, 70]
-bmi_labels = [
-    "Underweight (<18.5)",
-    "Normal (18.5–24.9)",
-    "Overweight (25–29.9)",
-    "Obese (30+)",
-]
-
-age_bins = [0, 18, 40, 60, 100]
-age_labels = [
-    "Child (0–17)",
-    "Young Adult (18–39)",
-    "Middle Age (40–59)",
-    "Senior (60+)",
-]
+# (bin edges defined earlier)
 
 
 # Function to categorize and count
@@ -227,7 +250,7 @@ tab5, tab6, tab7, tab8 = st.tabs(["Blood Pressure", "Blood Glucose", "BMI", "Age
 
 # ---------------- Blood Pressure ----------------
 with tab5:
-    st.subheader("Blood Pressure Categories")
+    st.subheader("Blood Pressure")
 
     col1, col2 = st.columns(2)
     with col1:
@@ -251,7 +274,7 @@ with tab5:
 
 # ---------------- Blood Glucose ----------------
 with tab6:
-    st.subheader("Blood Glucose Categories")
+    st.subheader("Blood Glucose")
 
     col1, col2 = st.columns(2)
     with col1:
@@ -285,14 +308,14 @@ with tab6:
 
 # ---------------- BMI ----------------
 with tab7:
-    st.subheader("BMI Categories (Dataset 1 only)")
+    st.subheader("BMI")
 
     st.markdown("**Dataset 1**")
     st.dataframe(bmi_counts[["BMI", "Count"]])
 
 # ---------------- Age ----------------
 with tab8:
-    st.subheader("Age Categories")
+    st.subheader("Age")
 
     col1, col2 = st.columns(2)
     with col1:
@@ -314,42 +337,172 @@ with tab8:
     combined_age = age_counts.groupby("Age")["Count"].sum().reset_index()
     st.dataframe(combined_age)
 
-# ---------------- Health Conditions ----------------
-st.subheader("Health Conditions")
+# --- Visualization Gallery ---
+st.title("Visualization Gallery")
 
-# Diabetes count (both datasets)
-diabetes_counts = pd.DataFrame(
-    {
-        "Condition": ["Has Diabetes", "No Diabetes"],
-        "Count": [
-            pd.concat([diabetes_df_clean["Diabetes"], kidney_df_clean["Diabetes"]])
-            .sum()
-            .round(0),
-            pd.concat(
-                [diabetes_df_clean["Diabetes"], kidney_df_clean["Diabetes"]]
-            ).shape[0]
-            - pd.concat([diabetes_df_clean["Diabetes"], kidney_df_clean["Diabetes"]])
-            .sum()
-            .round(0),
-        ],
-    }
+box_glucose_tab, box_bp_tab, bmi_tab, scatter_tab, heatmap_tab = st.tabs(
+    [
+        "Glucose by Diabetes (Boxplot)",
+        "Blood Pressure by Kidney Disease (Boxplot)",
+        "BMI vs Diabetes (Bar)",
+        "Age vs Blood Glucose (Scatter)",
+        "Correlation Heatmaps",
+    ]
 )
 
-# Kidney disease count (only in kidney dataset)
-kidney_counts = pd.DataFrame(
-    {
-        "Condition": ["Has Kidney Disease", "No Kidney Disease"],
-        "Count": [
-            kidney_df_clean["Kidney Disease"].sum(),
-            kidney_df_clean.shape[0] - kidney_df_clean["Kidney Disease"].sum(),
-        ],
-    }
+# Prepare data for visualizations
+
+# Diabetes dataset with readable labels
+DIABETES_LABEL_MAP = {0: "No Diabetes", 1: "Has Diabetes"}
+diabetes_display = diabetes_df_clean.assign(
+    DiabetesLabel=diabetes_df_clean["Diabetes"].map(DIABETES_LABEL_MAP)
 )
 
-col1, col2 = st.columns(2)
-with col1:
-    st.markdown("**Diabetes (Both Datasets)**")
-    st.dataframe(diabetes_counts)
-with col2:
-    st.markdown("**Kidney Disease (Kidney Dataset)**")
-    st.dataframe(kidney_counts)
+# Kidney dataset with readable labels
+kidney_display = kidney_df_clean.assign(
+    KidneyLabel=kidney_df_clean["Kidney Disease"].map(KIDNEY_MAP)
+)
+
+# BMI categories for Diabetes dataset
+bmi_plot_df = diabetes_display.assign(
+    BMICategory=pd.cut(
+        diabetes_display["BMI"],
+        bins=bmi_bins,
+        labels=bmi_labels,
+        right=False,
+    )
+)
+
+bmi_counts_plot = (
+    bmi_plot_df.groupby(["BMICategory", "DiabetesLabel"])
+    .size()
+    .reset_index(name="Count")
+)
+
+# Scatter plot preparation (combined datasets)
+scatter_df = combined_clean.dropna(subset=["Age", "Blood Glucose"]).copy()
+scatter_df["ConditionLabel"] = scatter_df.apply(
+    lambda row: (
+        f"Diabetes Dataset - {row['DiabetesStatus']}"
+        if row["Dataset"] == "Diabetes"
+        else f"Kidney Dataset - {row['KidneyStatus']}"
+    ),
+    axis=1,
+)
+scatter_df["KidneyStatus"] = scatter_df["KidneyStatus"].fillna("Not Applicable")
+
+with box_glucose_tab:
+    fig_glucose_box = px.box(
+        diabetes_display,
+        x="Diabetes",
+        y="Blood Glucose",
+        color="DiabetesLabel",
+        category_orders={"Diabetes": [0, 1]},
+        labels={
+            "Diabetes": "Diabetes Status (0 = No, 1 = Yes)",
+            "Blood Glucose": "Blood Glucose (mg/dL)",
+            "DiabetesLabel": "Diabetes Status",
+        },
+        title="Blood Glucose by Diabetes Status (Diabetes Dataset)",
+        points="outliers",
+    )
+    fig_glucose_box.update_traces(quartilemethod="inclusive")
+    st.plotly_chart(fig_glucose_box, use_container_width=True)
+
+with box_bp_tab:
+    fig_bp_box = px.box(
+        kidney_display,
+        x="Kidney Disease",
+        y="Blood Pressure",
+        color="KidneyLabel",
+        category_orders={"Kidney Disease": [0, 1]},
+        labels={
+            "Kidney Disease": "Kidney Disease Status (0 = No, 1 = Yes)",
+            "Blood Pressure": "Blood Pressure (Diastolic)",
+            "KidneyLabel": "Kidney Disease Status",
+        },
+        title="Blood Pressure by Kidney Disease Status (Kidney Dataset)",
+        points="outliers",
+    )
+    fig_bp_box.update_traces(quartilemethod="inclusive")
+    st.plotly_chart(fig_bp_box, use_container_width=True)
+
+with bmi_tab:
+    fig_bmi_bar = px.bar(
+        bmi_counts_plot,
+        x="BMICategory",
+        y="Count",
+        color="DiabetesLabel",
+        category_orders={"BMICategory": list(bmi_labels)},
+        labels={
+            "BMICategory": "BMI Category",
+            "Count": "Number of Patients",
+            "DiabetesLabel": "Diabetes Status",
+        },
+        title="BMI Categories by Diabetes Status (Diabetes Dataset)",
+        barmode="group",
+    )
+    fig_bmi_bar.update_layout(
+        xaxis_title="BMI Category", yaxis_title="Number of Patients"
+    )
+    st.plotly_chart(fig_bmi_bar, use_container_width=True)
+
+with scatter_tab:
+    fig_scatter = px.scatter(
+        scatter_df,
+        x="Age",
+        y="Blood Glucose",
+        color="ConditionLabel",
+        symbol="Dataset",
+        labels={
+            "Age": "Age (years)",
+            "Blood Glucose": "Blood Glucose (mg/dL)",
+            "ConditionLabel": "Condition",
+            "Dataset": "Dataset",
+        },
+        title="Age vs Blood Glucose (Diabetes & Kidney Datasets)",
+        hover_data={
+            "Dataset": True,
+            "DiabetesStatus": True,
+            "KidneyStatus": True,
+        },
+    )
+    st.plotly_chart(fig_scatter, use_container_width=True)
+
+with heatmap_tab:
+    col1, col2 = st.columns(2)
+
+    diabetes_corr = diabetes_df_clean.corr(numeric_only=True).round(2)
+    kidney_corr = kidney_df_clean.corr(numeric_only=True).round(2)
+
+    with col1:
+        st.markdown("**Diabetes Dataset**")
+        fig_heat_diabetes = px.imshow(
+            diabetes_corr,
+            text_auto=True,
+            color_continuous_scale="RdBu",
+            zmin=-1,
+            zmax=1,
+            labels=dict(color="Correlation"),
+        )
+        fig_heat_diabetes.update_layout(
+            title="Correlation Matrix (Diabetes Dataset)",
+            margin=dict(l=40, r=40, t=80, b=40),
+        )
+        st.plotly_chart(fig_heat_diabetes, use_container_width=True)
+
+    with col2:
+        st.markdown("**Kidney Disease Dataset**")
+        fig_heat_kidney = px.imshow(
+            kidney_corr,
+            text_auto=True,
+            color_continuous_scale="RdBu",
+            zmin=-1,
+            zmax=1,
+            labels=dict(color="Correlation"),
+        )
+        fig_heat_kidney.update_layout(
+            title="Correlation Matrix (Kidney Dataset)",
+            margin=dict(l=40, r=40, t=80, b=40),
+        )
+        st.plotly_chart(fig_heat_kidney, use_container_width=True)
