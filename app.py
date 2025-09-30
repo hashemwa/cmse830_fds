@@ -121,22 +121,29 @@ tab1, tab2 = st.tabs(["Dataset 1: Diabetes", "Dataset 2: Kidney Disease"])
 with tab1:
     show_clean = st.toggle("Show Cleaned Data", value=False)
     df = diabetes_df_clean if show_clean else diabetes_df
-    # Format numeric columns with no decimals for display
-    styled_df = df.style.format(
-        "{:.0f}", subset=df.select_dtypes(include="number").columns
-    ).highlight_null(color="rgba(250, 0, 0, 0.11)")
-    st.dataframe(styled_df, width="stretch", height=500)
-    st.write(f"Rows × Columns: {diabetes_df.shape[0]} × {diabetes_df.shape[1]}")
+    # Inline styling: cast numeric columns to float to avoid pd.NA ambiguity
+    display_df = df.copy()
+    num_cols = display_df.select_dtypes(include="number").columns
+    if len(num_cols) > 0:
+        display_df[num_cols] = display_df[num_cols].astype("float64")
+    styled_df = display_df.style.format("{:.0f}", subset=num_cols).highlight_null(
+        color="rgba(250, 0, 0, 0.11)"
+    )
+    st.dataframe(styled_df, use_container_width=True, height=500)
+    st.write(f"Rows × Columns: {df.shape[0]} × {df.shape[1]}")
 
 with tab2:
     show_clean2 = st.toggle("Show Cleaned Data", value=False, key="kidney")
     df = kidney_df_clean if show_clean2 else kidney_df
-    # Format numeric columns with no decimals for display
-    styled_df = df.style.format(
-        "{:.0f}", subset=df.select_dtypes(include="number").columns
-    ).highlight_null(color="rgba(250, 0, 0, 0.11)")
-    st.dataframe(styled_df, width="stretch", height=500)
-    st.write(f"Rows × Columns: {kidney_df.shape[0]} × {kidney_df.shape[1]}")
+    display_df = df.copy()
+    num_cols = display_df.select_dtypes(include="number").columns
+    if len(num_cols) > 0:
+        display_df[num_cols] = display_df[num_cols].astype("float64")
+    styled_df = display_df.style.format("{:.0f}", subset=num_cols).highlight_null(
+        color="rgba(250, 0, 0, 0.11)"
+    )
+    st.dataframe(styled_df, use_container_width=True, height=500)
+    st.write(f"Rows × Columns: {df.shape[0]} × {df.shape[1]}")
 
 
 # --- Basic Stats ---
@@ -340,13 +347,14 @@ with tab8:
 # --- Visualization Gallery ---
 st.title("Visualization Gallery")
 
-box_glucose_tab, box_bp_tab, bmi_tab, scatter_tab, heatmap_tab = st.tabs(
+box_glucose_tab, box_bp_tab, bmi_tab, scatter_tab, heatmap_tab, barplot_tab = st.tabs(
     [
         "Glucose by Diabetes (Boxplot)",
         "Blood Pressure by Kidney Disease (Boxplot)",
         "BMI vs Diabetes (Bar)",
         "Age vs Blood Glucose (Scatter)",
         "Correlation Heatmaps",
+        "Both Conditions (Bar)",
     ]
 )
 
@@ -468,6 +476,41 @@ with scatter_tab:
         },
     )
     st.plotly_chart(fig_scatter, use_container_width=True)
+
+with barplot_tab:
+    # Dataset 2 only: bars are Diabetes (Yes/No), colors split by Kidney Disease (Yes/No)
+    kd_df = kidney_df_clean[["Diabetes", "Kidney Disease"]].dropna()
+    counts = (
+        kd_df.groupby(["Diabetes", "Kidney Disease"]).size().reset_index(name="Count")
+    )
+    counts["DiabetesLabel"] = counts["Diabetes"].map(DIABETES_LABEL_MAP)
+    counts["KidneyLabel"] = counts["Kidney Disease"].map(KIDNEY_MAP)
+
+    fig_barplot = px.bar(
+        counts,
+        x="DiabetesLabel",
+        y="Count",
+        color="KidneyLabel",
+        barmode="stack",
+        category_orders={
+            "DiabetesLabel": ["Has Diabetes", "No Diabetes"],
+            "KidneyLabel": ["Has Kidney Disease", "No Kidney Disease"],
+        },
+        color_discrete_map={
+            "Has Kidney Disease": "crimson",
+            "No Kidney Disease": "steelblue",
+        },
+        labels={
+            "DiabetesLabel": "Diabetes Status",
+            "Count": "Number of Patients",
+            "KidneyLabel": "Kidney Disease Status",
+        },
+        title="Kidney Disease split within Diabetes vs No Diabetes (Kidney Dataset)",
+        text="Count",
+    )
+    fig_barplot.update_traces(textposition="outside")
+    fig_barplot.update_layout(yaxis_title="Count", xaxis_title="Diabetes Status")
+    st.plotly_chart(fig_barplot, use_container_width=True)
 
 with heatmap_tab:
     col1, col2 = st.columns(2)
