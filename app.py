@@ -8,7 +8,8 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
-# ---Data Cleaning---
+
+# --- Data Overview ---
 st.title("Data Overview")
 
 # Load datasets
@@ -21,7 +22,9 @@ diabetes_df = pd.read_csv(
         "Outcome": "Diabetes",
     }
 )
-diabetes_df["Diabetes"] = diabetes_df["Diabetes"].astype("category")
+# Ensure Diabetes stays numeric (0/1) with nullable integer dtype
+diabetes_df["Diabetes"] = pd.to_numeric(diabetes_df["Diabetes"]).astype("Int64")
+
 kidney_df = pd.read_csv(
     "kidney_disease.csv", usecols=["age", "bp", "bgr", "dm", "classification"]
 ).rename(
@@ -33,15 +36,21 @@ kidney_df = pd.read_csv(
         "classification": "Kidney Disease",
     }
 )
-# Convert categorical columns to 'Yes'/'No'
-# Normalize whitespace/case, then map to 1/0
-cols_map = ["Diabetes", "Kidney Disease"]
-kidney_df[cols_map] = kidney_df[cols_map].apply(
-    lambda s: s.astype("string").str.strip().str.lower().str.replace(r"\s+", "", regex=True)
-)
-kidney_df[cols_map] = kidney_df[cols_map].replace({"yes": 1, "no": 0, "ckd": 1, "notckd": 0})
 
-# Imputer for numeric columns (mean) and categorical columns (mode)
+# Normalize text labels and map to 1/0 (handle stray spaces/tabs/case)
+for col in ["Diabetes", "Kidney Disease"]:
+    kidney_df[col] = (
+        kidney_df[col]
+        .astype("string")
+        .str.strip()
+        .str.lower()
+        .str.replace(r"\s+", "", regex=True)
+    )
+    kidney_df[col] = kidney_df[col].replace({"yes": 1, "no": 0, "ckd": 1, "notckd": 0})
+    kidney_df[col] = pd.to_numeric(kidney_df[col]).astype("Int64")
+
+
+# Simple cleaning: drop duplicates, impute numeric with mean and categoricals with mode
 imputer_mean = SimpleImputer(strategy="mean")
 imputer_mode = SimpleImputer(strategy="most_frequent")
 
@@ -54,7 +63,10 @@ def clean_data(df):
     if len(num_cols) > 0:
         df_clean[num_cols] = imputer_mean.fit_transform(df_clean[num_cols])
 
-    cat_cols = df_clean.select_dtypes(include="object").columns
+    # Include object, string extension, and category dtypes
+    cat_cols = df_clean.select_dtypes(
+        include=["object", "string", "category", "boolean"]
+    ).columns
     if len(cat_cols) > 0:
         df_clean[cat_cols] = imputer_mode.fit_transform(df_clean[cat_cols])
 
@@ -67,7 +79,6 @@ kidney_df_clean = clean_data(kidney_df)
 
 # Two tabs: Dataset 1 (Diabetes) and Dataset 2 (Kidney Disease)
 tab1, tab2 = st.tabs(["Dataset 1: Diabetes", "Dataset 2: Kidney Disease"])
-
 
 with tab1:
     show_clean = st.toggle("Show Cleaned Data", value=False)
@@ -100,7 +111,7 @@ with tab2:
     st.write(f"{kidney_df.shape[0]} Rows × {kidney_df.shape[1]} Columns")
 
 
-# ---Stats---
+# --- Basic Stats ---
 st.title("Basic Stats")
 tab3, tab4 = st.tabs(["Dataset 1: Diabetes", "Dataset 2: Kidney Disease"])
 with tab3:
