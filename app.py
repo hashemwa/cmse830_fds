@@ -79,9 +79,9 @@ with tab1:
     show_clean = st.toggle("Show Cleaned Data", value=False)
     df = diabetes_df_clean if show_clean else diabetes_df
     # Format numeric columns with no decimals for display
-    num_cols_view = list(df.select_dtypes(include="number").columns)
-    fmt_map = {c: "{:.0f}" for c in num_cols_view}
-    styled_df = df.style.format(fmt_map).highlight_null(color="rgba(250, 0, 0, 0.11)")
+    styled_df = df.style.format(
+        "{:.0f}", subset=df.select_dtypes(include="number").columns
+    ).highlight_null(color="rgba(250, 0, 0, 0.11)")
     st.dataframe(styled_df, use_container_width=True, height=500)
     st.write(f"Rows × Columns: {diabetes_df.shape[0]} × {diabetes_df.shape[1]}")
 
@@ -89,9 +89,9 @@ with tab2:
     show_clean2 = st.toggle("Show Cleaned Data", value=False, key="kidney")
     df = kidney_df_clean if show_clean2 else kidney_df
     # Format numeric columns with no decimals for display
-    num_cols_view = list(df.select_dtypes(include="number").columns)
-    fmt_map = {c: "{:.0f}" for c in num_cols_view}
-    styled_df = df.style.format(fmt_map).highlight_null(color="rgba(250, 0, 0, 0.11)")
+    styled_df = df.style.format(
+        "{:.0f}", subset=df.select_dtypes(include="number").columns
+    ).highlight_null(color="rgba(250, 0, 0, 0.11)")
     st.dataframe(styled_df, use_container_width=True, height=500)
     st.write(f"Rows × Columns: {kidney_df.shape[0]} × {kidney_df.shape[1]}")
 
@@ -102,12 +102,46 @@ tab3, tab4 = st.tabs(["Dataset 1: Diabetes", "Dataset 2: Kidney Disease"])
 
 with tab3:
     st.subheader("Summary Statistics")
-    st.write(diabetes_df_clean.describe().T)
+    stats = (
+        diabetes_df_clean.describe()
+        .rename(
+            index={
+                "count": "Count",
+                "mean": "Mean",
+                "std": "Standard Deviation",
+                "min": "Minimum",
+                "25%": "25th Percentile",
+                "50%": "Median",
+                "75%": "75th Percentile",
+                "max": "Maximum",
+            }
+        )
+        .T.round(3)
+    )
+    st.write(stats)
     st.subheader("Correlation Matrix")
-    st.write(diabetes_df_clean.corr(numeric_only=True).T)
-
+    st.write(diabetes_df_clean.corr().T.round(3))
 with tab4:
     st.subheader("Summary Statistics")
-    st.write(kidney_df_clean.describe().T)
+    stats = (
+        kidney_df_clean.describe()
+        .rename(
+            index={
+                "count": "Count",
+                "mean": "Mean",
+                "std": "Standard Deviation",
+                "min": "Minimum",
+                "25%": "25th Percentile",
+                "50%": "Median",
+                "75%": "75th Percentile",
+                "max": "Maximum",
+            }
+        )
+        .T.round(3)
+    )
+    st.write(stats)
     st.subheader("Correlation Matrix")
-    st.write(kidney_df_clean.corr(numeric_only=True).T)
+    st.write(kidney_df_clean.corr().T.round(3))
+
+    # --- New Dataset ---
+st.title("New Dataset: Combined Health Data")
