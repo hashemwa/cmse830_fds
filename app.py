@@ -32,8 +32,7 @@ with st.sidebar:
         "Categorical fields always use the most frequent value."
     )
 
-# --- Data Overview ---
-st.title("Data Overview")
+# --- Data Loading ---
 
 # Load datasets (subset and rename for readability)
 diabetes_df = pd.read_csv(
@@ -139,6 +138,68 @@ combined_clean = pd.concat(
     ignore_index=True,
 )
 
+st.title("Do People with Diabetes Face Higher CKD Risk?")
+st.caption(
+    "Exploring two clinical datasets to understand how diabetes status shapes the likelihood of chronic kidney disease (CKD)."
+)
+
+# --- Story Metrics ---
+def _rate(series: pd.Series) -> float:
+    non_null = series.dropna()
+    return float(non_null.mean()) if len(non_null) > 0 else float("nan")
+
+
+overall_ckd_rate = _rate(kidney_df_clean["Kidney Disease"])
+with_diabetes = kidney_df_clean[kidney_df_clean["Diabetes"] == 1]
+without_diabetes = kidney_df_clean[kidney_df_clean["Diabetes"] == 0]
+
+ckd_rate_with_diabetes = _rate(with_diabetes["Kidney Disease"])
+ckd_rate_without_diabetes = _rate(without_diabetes["Kidney Disease"])
+rate_gap = (
+    ckd_rate_with_diabetes - ckd_rate_without_diabetes
+    if pd.notna(ckd_rate_with_diabetes) and pd.notna(ckd_rate_without_diabetes)
+    else float("nan")
+)
+risk_ratio = (
+    ckd_rate_with_diabetes / ckd_rate_without_diabetes
+    if pd.notna(ckd_rate_with_diabetes)
+    and pd.notna(ckd_rate_without_diabetes)
+    and ckd_rate_without_diabetes != 0
+    else float("nan")
+)
+
+st.markdown("### Key Storyline")
+st.markdown(
+    "Patients managing diabetes appear more vulnerable to CKD. "
+    "Use the controls on the left to adjust how missing values are filled and see how the narrative holds up."
+)
+
+metric_cols = st.columns(3)
+metric_cols[0].metric(
+    "CKD prevalence (all patients)",
+    f"{overall_ckd_rate:.1%}" if pd.notna(overall_ckd_rate) else "N/A",
+)
+metric_cols[1].metric(
+    "CKD prevalence with diabetes",
+    f"{ckd_rate_with_diabetes:.1%}" if pd.notna(ckd_rate_with_diabetes) else "N/A",
+    (
+        f"{rate_gap:+.1%} vs no diabetes"
+        if pd.notna(rate_gap)
+        else None
+    ),
+)
+metric_cols[2].metric(
+    "Relative risk",
+    f"{risk_ratio:.2f}×" if pd.notna(risk_ratio) and risk_ratio != float("inf") else "N/A",
+    (
+        f"{(risk_ratio - 1):+.2f}× over baseline"
+        if pd.notna(risk_ratio) and risk_ratio != float("inf")
+        else None
+    ),
+)
+
+st.divider()
+
 # Binning definitions
 bp_bins = [0, 60, 80, 90, 200]
 bp_labels = ["Low (<60)", "Normal (60-79)", "Elevated (80-89)", "High (90+)"]
@@ -164,6 +225,10 @@ age_labels = [
 
 
 # Two tabs: Dataset 1 (Diabetes) and Dataset 2 (Kidney Disease)
+st.header("Explore the Records")
+st.markdown(
+    "Toggle between raw and cleaned views to see how the selected imputation strategy reshapes each dataset."
+)
 tab1, tab2 = st.tabs(["Dataset 1: Diabetes", "Dataset 2: Kidney Disease"])
 
 with tab1:
@@ -194,8 +259,13 @@ with tab2:
     st.write(f"{df.shape[0]} Rows × {df.shape[1]} Columns")
 
 
+st.divider()
+
 # --- Basic Stats ---
-st.title("Basic Stats")
+st.header("Statistical Backdrop")
+st.markdown(
+    "Get a statistical snapshot to anchor the story—do the averages, spreads, and correlations reinforce the CKD risk signal?"
+)
 tab3, tab4 = st.tabs(["Dataset 1: Diabetes", "Dataset 2: Kidney Disease"])
 
 with tab3:
@@ -242,7 +312,10 @@ with tab4:
     st.write(kidney_df_clean.corr().T.round(3))
 
 # --- Dataset Variable Counts ---
-st.title("Count of Variables")
+st.header("Population Profiles")
+st.markdown(
+    "Group patients into clinically meaningful ranges to compare how diabetes and kidney disease cases accumulate."
+)
 
 
 # Helper function to add ranges into labels
@@ -392,17 +465,22 @@ with tab8:
     combined_age = age_counts.groupby("Age")["Count"].sum().reset_index()
     st.dataframe(combined_age)
 
-# --- Visualization Gallery ---
-st.title("Visualization Gallery")
+st.divider()
 
-box_glucose_tab, box_bp_tab, bmi_tab, scatter_tab, heatmap_tab, barplot_tab = st.tabs(
+# --- Visualization Gallery ---
+st.header("Visual Narrative")
+st.markdown(
+    "Follow the visuals from prevalence comparisons through to risk factors to see where diabetes and CKD intersect most strongly."
+)
+
+risk_tab, box_glucose_tab, box_bp_tab, bmi_tab, scatter_tab, heatmap_tab = st.tabs(
     [
+        "CKD Risk by Diabetes",
         "Glucose by Diabetes (Boxplot)",
         "Blood Pressure by Kidney Disease (Boxplot)",
         "BMI vs Diabetes (Bar)",
         "Age vs Blood Glucose (Scatter)",
         "Correlation Heatmaps",
-        "Both Conditions (Bar)",
     ]
 )
 
@@ -448,6 +526,9 @@ scatter_df["ConditionLabel"] = scatter_df.apply(
 scatter_df["KidneyStatus"] = scatter_df["KidneyStatus"].fillna("Not Applicable")
 
 with box_glucose_tab:
+    st.markdown(
+        "Higher blood glucose values cluster with positive diabetes diagnoses, reinforcing the metabolic load within the diabetes cohort."
+    )
     fig_glucose_box = px.box(
         diabetes_display,
         x="Diabetes",
@@ -466,6 +547,9 @@ with box_glucose_tab:
     st.plotly_chart(fig_glucose_box, use_container_width=True)
 
 with box_bp_tab:
+    st.markdown(
+        "For kidney patients, elevated blood pressure aligns with CKD—use this alongside diabetes status to flag compounding risks."
+    )
     fig_bp_box = px.box(
         kidney_display,
         x="Kidney Disease",
@@ -484,6 +568,9 @@ with box_bp_tab:
     st.plotly_chart(fig_bp_box, use_container_width=True)
 
 with bmi_tab:
+    st.markdown(
+        "Obesity amplifies diabetes prevalence, suggesting lifestyle-related strain that can accelerate kidney complications."
+    )
     fig_bmi_bar = px.bar(
         bmi_counts_plot,
         x="BMICategory",
@@ -504,6 +591,9 @@ with bmi_tab:
     st.plotly_chart(fig_bmi_bar, use_container_width=True)
 
 with scatter_tab:
+    st.markdown(
+        "Plotting age against blood glucose highlights how both datasets overlap—diabetic patients (warm colors) often sit in higher glucose bands."
+    )
     fig_scatter = px.scatter(
         scatter_df,
         x="Age",
@@ -525,8 +615,11 @@ with scatter_tab:
     )
     st.plotly_chart(fig_scatter, use_container_width=True)
 
-with barplot_tab:
+with risk_tab:
     # Dataset 2 only: bars are Diabetes (Yes/No), colors split by Kidney Disease (Yes/No)
+    st.markdown(
+        "Diabetes status clearly shifts the CKD distribution—heightened bars indicate a larger share of kidney disease among diabetic patients."
+    )
     kd_df = kidney_df_clean[["Diabetes", "Kidney Disease"]].dropna()
     counts = (
         kd_df.groupby(["Diabetes", "Kidney Disease"]).size().reset_index(name="Count")
@@ -562,6 +655,10 @@ with barplot_tab:
 
 with heatmap_tab:
     col1, col2 = st.columns(2)
+
+    st.markdown(
+        "Correlation maps reveal which vitals move together. Look for combinations where diabetes signals mirror kidney disease markers."
+    )
 
     diabetes_corr = diabetes_df_clean.corr(numeric_only=True).round(2)
     kidney_corr = kidney_df_clean.corr(numeric_only=True).round(2)
