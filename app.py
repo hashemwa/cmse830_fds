@@ -1,7 +1,12 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from sklearn.impute import SimpleImputer
+from pandas.api.types import is_integer_dtype
+from typing import Optional
+
+from sklearn.base import TransformerMixin
+from sklearn.experimental import enable_iterative_imputer  # noqa: F401
+from sklearn.impute import IterativeImputer, KNNImputer, SimpleImputer
 
 st.set_page_config(
     page_title="CMSE 830 Midterm Project",
@@ -9,6 +14,23 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+with st.sidebar:
+    st.header("Data Cleaning")
+    numeric_imputation_method = st.selectbox(
+        "Numeric Imputation Method",
+        ("Simple (Mean)", "Simple (Median)", "KNN", "MICE"),
+    )
+    knn_neighbors: Optional[int] = None
+    mice_max_iter: Optional[int] = None
+    if numeric_imputation_method == "KNN":
+        knn_neighbors = st.slider("KNN Neighbors (k)", min_value=1, max_value=15, value=5)
+    elif numeric_imputation_method == "MICE":
+        mice_max_iter = st.slider("MICE Iterations", min_value=1, max_value=25, value=10)
+    st.caption(
+        "Adjust how numeric columns are imputed. "
+        "Categorical fields always use the most frequent value."
+    )
 
 # --- Data Overview ---
 st.title("Data Overview")
@@ -49,27 +71,53 @@ for col in ["Diabetes", "Kidney Disease"]:
         .astype("Int64")
     )
 
-# Simple cleaning: drop duplicates, impute numeric with mean and categoricals with mode
-imputer_mean = SimpleImputer(strategy="mean")
-imputer_mode = SimpleImputer(strategy="most_frequent")
+# Simple cleaning: drop duplicates, impute numeric with selected strategy, categoricals with mode
+def get_numeric_imputer(
+    method: str, neighbors: Optional[int], mice_iter: Optional[int]
+) -> TransformerMixin:
+    if method == "Simple (Median)":
+        return SimpleImputer(strategy="median")
+    if method == "KNN":
+        return KNNImputer(n_neighbors=neighbors or 5)
+    if method == "MICE":
+        return IterativeImputer(max_iter=mice_iter or 10, random_state=0)
+    return SimpleImputer(strategy="mean")
 
 
-def clean_data(df: pd.DataFrame) -> pd.DataFrame:
+def clean_data(
+    df: pd.DataFrame,
+    numeric_method: str,
+    neighbors: Optional[int],
+    mice_iter: Optional[int],
+) -> pd.DataFrame:
     df_clean = df.drop_duplicates().copy()
     num_cols = df_clean.select_dtypes(include="number").columns
     if len(num_cols) > 0:
-        df_clean[num_cols] = imputer_mean.fit_transform(df_clean[num_cols])
+        numeric_imputer = get_numeric_imputer(numeric_method, neighbors, mice_iter)
+        original_dtypes = df_clean[num_cols].dtypes
+        imputed_numeric = numeric_imputer.fit_transform(df_clean[num_cols])
+        df_clean[num_cols] = pd.DataFrame(
+            imputed_numeric, columns=num_cols, index=df_clean.index
+        )
+        for col in num_cols:
+            if is_integer_dtype(original_dtypes[col]):
+                df_clean[col] = df_clean[col].round().astype(original_dtypes[col])
     # Include object, string extension, and category dtypes
     cat_cols = df_clean.select_dtypes(
         include=["object", "string", "category", "boolean"]
     ).columns
     if len(cat_cols) > 0:
-        df_clean[cat_cols] = imputer_mode.fit_transform(df_clean[cat_cols])
+        cat_imputer = SimpleImputer(strategy="most_frequent")
+        df_clean[cat_cols] = cat_imputer.fit_transform(df_clean[cat_cols])
     return df_clean
 
 
-diabetes_df_clean = clean_data(diabetes_df)
-kidney_df_clean = clean_data(kidney_df)
+diabetes_df_clean = clean_data(
+    diabetes_df, numeric_imputation_method, knn_neighbors, mice_max_iter
+)
+kidney_df_clean = clean_data(
+    kidney_df, numeric_imputation_method, knn_neighbors, mice_max_iter
+)
 
 
 STATUS_MAP = {1: "Has Diabetes", 0: "No Diabetes"}
@@ -130,7 +178,7 @@ with tab1:
         color="rgba(250, 0, 0, 0.11)"
     )
     st.dataframe(styled_df, use_container_width=True, height=500)
-    st.write(f"Rows × Columns: {df.shape[0]} × {df.shape[1]}")
+    st.write(f"{df.shape[0]} Rows × {df.shape[1]} Columns")
 
 with tab2:
     show_clean2 = st.toggle("Show Cleaned Data", value=False, key="kidney")
@@ -143,7 +191,7 @@ with tab2:
         color="rgba(250, 0, 0, 0.11)"
     )
     st.dataframe(styled_df, use_container_width=True, height=500)
-    st.write(f"Rows × Columns: {df.shape[0]} × {df.shape[1]}")
+    st.write(f"{df.shape[0]} Rows × {df.shape[1]} Columns")
 
 
 # --- Basic Stats ---
