@@ -2,78 +2,79 @@
 
 ## Project Overview
 
-This project demonstrates why a “one-size-fits-all” approach fails across the UCI Heart Disease sites (Cleveland, Hungary, Switzerland, Long Beach VA). A preparation script builds clean, site-wise imputations that respect structured missingness, and a Streamlit dashboard lets you explore disease patterns, compare imputers, and observe the generalization gap when models are tuned on Cleveland alone.
+This project shows why a single rule book does not work for the UCI Heart Disease collection. We combine four local hospital files (Cleveland, Hungary, Switzerland, Long Beach VA), clean them with site-aware rules, and surface the differences through an interactive Streamlit app. The same Python codebase delivers the data prep, the dashboard, and a quick generalization demo.
 
 ## Quick Start
 
 ```bash
-python prepare.py        # generate imputed datasets and summary prints
-streamlit run app.py     # launch the dashboard
+python prepare.py        # optional: rebuild the cleaned CSVs and print a console summary
+streamlit run app.py     # launch the Streamlit dashboard
 ```
 
-All paths are relative; no data downloads are required. The raw CSVs must remain alongside the scripts.
+All paths are relative. Keep the raw `.data` files in the project folder.
 
 ## Rubric Alignment
 
-### Data Collection & Prep (25%)
-- Uses four distinct local sources: `cleveland.data`, `hungary.data`, `switzerland.data`, `long_beach_va.data` (all tagged with an `origin` column).
-- `prepare.py` prints per-site duplicate diagnostics (exact matches, feature-only duplicates, conflicting labels) and drops **exact duplicates only**.
-- Missing values: Switzerland’s `chol==0` converted to `NaN`, categorical codes imputed with per-site `SimpleImputer(most_frequent)`, numeric fields imputed with per-site `StandardScaler` → `KNNImputer(k=5)` → inverse scaling (Switzerland `chol` excluded from KNN and left missing).
-- Dtypes clarified: categorical codes cast to nullable `Int64`, `origin` stored as categorical, binary target `target = (num > 0)` added alongside original `num`.
-- Saved outputs: `heart_imputed_sitewise.csv` (primary) and `heart_imputed_simple.csv` (baseline comparison).
+### Data Collection & Preparation (25%)
+- Four distinct sources: `cleveland.data`, `hungary.data`, `switzerland.data`, `long_beach_va.data`, each tagged with an `origin` column.
+- Duplicate diagnostics per site (exact matches, feature-only matches, conflicting labels) with exact duplicates removed.
+- Missing data rules: Switzerland `chol==0` converted to `NaN`; categorical codes imputed with per-site `SimpleImputer(most_frequent)`; numeric fields imputed with per-site `StandardScaler` → `KNNImputer(k=5)` → inverse scaling (Switzerland `chol` excluded from KNN and left missing).
+- Data types: categorical codes stored as nullable `Int64`, `origin` as categorical, binary target `target = (num > 0)` alongside the original `num`.
+- Saved outputs: `heart_imputed_sitewise.csv` (primary) and `heart_imputed_simple.csv` (baseline).
 
-### EDA & Visualization (25%)
-- Dashboard visualizations tied to disease presence (`target`):
-  - Boxplots: `oldpeak` vs target, `thalach` vs target.
-  - Count plot: chest pain type (`cp`) split by target.
-  - Interaction scatter: `oldpeak` vs `thalach`, color-coded by target and faceted by origin (style).
-  - Missingness heatmap for `['chol', 'ca', 'thal', 'origin', 'target']` highlights Switzerland’s structural gaps.
-- Basic statistics section (mean/median/std) for selected vitals plus class balance table per origin.
-- On-page captions explain how each figure supports the “one-size-fits-all is false” narrative.
+### Exploratory Data Analysis & Visualization (25%)
+- Three+ visualization types in the app, all tied to `target`:
+  - Box plots for `oldpeak` and `thalach` vs disease status.
+  - Grouped bar chart for chest pain code (`cp`) vs disease status.
+  - Interaction scatter (`oldpeak` vs `thalach`) colored by disease status and marked by origin.
+  - Missingness heatmap for `['chol', 'ca', 'thal', 'origin', 'target']` highlighting Switzerland’s structural gaps.
+- Summary tables show mean/median/std for key vitals and class balance per origin.
+- Captions and short notes explain what each chart reveals about the “one-size-fits-all” claim.
 
 ### Data Processing (15%)
-- Two imputation approaches:
-  - **Site-wise KNN** (primary): StandardScaler → KNN (k=5) per origin.
-  - **Simple per-site median** baseline: most-frequent for categoricals, median for numerics (shown in stability table and toggleable in app).
-- No imputation applied to the label `num`; Switzerland `chol` remains missing under the KNN strategy to respect structural absence.
+- Two imputation strategies:
+  - Site-wise KNN (primary) with StandardScaler and KNN (k=5) per site.
+  - Simple per-site median baseline for comparison in the app.
+- Labels are not imputed; Switzerland cholesterol remains missing in the KNN output so the structured gap stays visible.
 
-### Streamlit (25%)
-- Functional app with at least two interactive controls: imputation strategy radio, origin multiselect, age range slider, optional “hide cholesterol” checkbox.
-- Clear narrative text and inline captions explain what to examine and why site-wise handling matters.
-- Includes instructions for deployment (see below) and a polished, clean layout with collapsible previews and captions.
+### Streamlit App Development (25%)
+- Functional dashboard with at least two interactive controls: imputation toggle, origin multiselect, age slider, and an optional “hide cholesterol” checkbox.
+- Story tab, explorer tab, missing-data tab, data-prep tab, and model tab with plain-language documentation.
+- Auto-preparation runs on app load; download buttons supply the cleaned CSVs. Deployment instructions are below.
 
-### GitHub & Documentation (10%)
-- Organized repository with core files: `prepare.py`, `app.py`, `README.md`, `requirements.txt`, and the original data files.
-- README provides overview, setup steps, rubric mapping, and highlights for graders.
+### GitHub Repository (10%)
+- Organized repo with `app.py`, `prepare.py`, `requirements.txt`, `README.md`, and the raw `.data` files.
+- README covers the project overview, rubric alignment, setup steps, and deployment notes.
 
-### Above & Beyond (+20% potential)
-- Complex missingness highlighted via heatmap and optional “hide cholesterol” control that respects Switzerland’s structural gaps.
-- Stability snapshot contrasts mean `oldpeak`, `thalach`, and `ca` by origin across both imputers.
-- Generalization demo: logistic regression trained on Cleveland only, accuracy/AUC reported for each test site to reveal the generalization gap when relying on Cleveland.
-- Streamlit UI includes captions, toggles, and a data preview expander for a polished feel.
+### Above & Beyond Opportunities (+20% potential)
+- Complex missingness conveyed through the heatmap and the “hide cholesterol” option (Switzerland remains missing under site-wise KNN).
+- Stability snapshot compares mean `oldpeak`, `thalach`, and `ca` across both imputers.
+- Generalization demo trains a logistic regression on Cleveland only and reports accuracy/AUC on the other sites, showing the generalization gap.
+- App layout uses tabs, metrics, captions, and download buttons for a polished presentation.
 
 ## File Guide
 
 | File | Purpose |
 | --- | --- |
-| `prepare.py` | Loads site CSVs, reports duplicates, performs site-wise imputations (KNN + simple baseline), prints summary tables, saves processed datasets, and runs the generalization demo. |
-| `app.py` | Streamlit dashboard: interactive filtering, disease-linked charts, missingness heatmap, stability snapshot, and generalization results. |
-| `heart_imputed_sitewise.csv` | Output of site-wise KNN pipeline (generated by running `prepare.py`). |
-| `heart_imputed_simple.csv` | Baseline simple imputation output for comparison. |
-| `requirements.txt` | Minimal dependencies for reproducing the workflow. |
+| `app.py` | Contains the full pipeline (loading, deduping, imputing) and the Streamlit UI. Run with `streamlit run app.py`. |
+| `prepare.py` | CLI helper that calls the shared pipeline, saves the CSVs, and prints a quick summary. |
+| `heart_imputed_sitewise.csv` | Site-wise KNN output (created on-demand by the pipeline). |
+| `heart_imputed_simple.csv` | Simple per-site median baseline (also created on-demand). |
+| `requirements.txt` | Minimal dependency list: pandas, numpy, scikit-learn, streamlit, plotly. |
 | `heart-disease.names` | Original UCI data dictionary for reference. |
 
 ## Deployment (Streamlit Community Cloud)
 
-1. Push the project to GitHub.
-2. Sign in at [streamlit.io](https://share.streamlit.io/) and select “New app.”
-3. Point to your repository and set the entry point to `app.py`.
-4. Click **Deploy** (ensure `python prepare.py` has been run locally or provide the generated CSVs in the repo).
+1. Push the repo to GitHub.
+2. Sign in at [share.streamlit.io](https://share.streamlit.io) and select **New app**.
+3. Choose your repo, main branch, and `app.py` entry point.
+4. (Optional) run `python prepare.py` locally first so the CSVs are committed; otherwise, the app will generate them on first load.
+5. Click **Deploy**. The URL can be shared with classmates or graders.
 
-## Notes for Graders
+## Notes for Presenters and Graders
 
-- Run `python prepare.py` first to regenerate the outputs and view console summaries (duplicate counts, missingness report, stability snapshot, logistic regression metrics).
-- Launch `streamlit run app.py` to explore the interactive narrative.
-- Toggle between imputation strategies to see how Switzerland’s structural cholesterol missingness is preserved (KNN) or filled (simple median), reinforcing that cross-site leakage distorts downstream analyses.
+- The dashboard auto-runs the cleaning steps at startup. Use the download buttons if you want the processed CSVs.
+- Switch between “Site-wise KNN” and “Simple median” to compare imputers and highlight Switzerland’s missing cholesterol.
+- The Model tab reveals how a Cleveland-only model drops in accuracy and AUC on other sites, reinforcing the main story.
 
-Enjoy exploring why the heart disease benchmark behaves differently once every site gets the care it deserves!*** End Patch
+Enjoy presenting how local context changes the heart disease diagnosis story!*** End Patch
