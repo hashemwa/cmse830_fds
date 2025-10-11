@@ -1,55 +1,79 @@
-# Midterm Project: Student Performance Analyzer
+# Midterm Project – UCI Heart Disease Sites
 
 ## Project Overview
 
-This project is a Streamlit web application designed to analyze student performance and well-being. It uses two distinct datasets to explore the various factors that influence academic success. This application is an interactive tool for data exploration, visualization, and analysis, and it fulfills the requirements for the CMSE 830 midterm project.
+This project demonstrates why a “one-size-fits-all” approach fails across the UCI Heart Disease sites (Cleveland, Hungary, Switzerland, Long Beach VA). A preparation script builds clean, site-wise imputations that respect structured missingness, and a Streamlit dashboard lets you explore disease patterns, compare imputers, and observe the generalization gap when models are tuned on Cleveland alone.
 
-## Features
+## Quick Start
 
--   **Interactive UI**: A modern, dark-themed, and user-friendly interface built with Streamlit.
--   **Data Processing**: Demonstrates data cleaning and imputation techniques.
--   **Exploratory Data Analysis (EDA)**: Includes multiple interactive plot types (histograms, box plots, scatter plots, and correlation heatmaps) and statistical summaries.
--   **Advanced Analysis**: A section for more in-depth analysis, including merging datasets.
--   **Modular Code**: The code is organized into separate files for clarity and maintainability.
+```bash
+python prepare.py        # generate imputed datasets and summary prints
+streamlit run app.py     # launch the dashboard
+```
 
-## How to Run the Application
+All paths are relative; no data downloads are required. The raw CSVs must remain alongside the scripts.
 
-1.  **Clone the Repository**
-    ```bash
-    git clone <your-repo-link>
-    cd <your-repo-folder>
-    ```
+## Rubric Alignment
 
-2.  **Install Dependencies**
-    Make sure you have Python 3.7+ installed. Then, install the required libraries using pip:
-    ```bash
-    pip install -r requirements.txt
-    ```
+### Data Collection & Prep (25%)
+- Uses four distinct local sources: `cleveland.data`, `hungary.data`, `switzerland.data`, `long_beach_va.data` (all tagged with an `origin` column).
+- `prepare.py` prints per-site duplicate diagnostics (exact matches, feature-only duplicates, conflicting labels) and drops **exact duplicates only**.
+- Missing values: Switzerland’s `chol==0` converted to `NaN`, categorical codes imputed with per-site `SimpleImputer(most_frequent)`, numeric fields imputed with per-site `StandardScaler` → `KNNImputer(k=5)` → inverse scaling (Switzerland `chol` excluded from KNN and left missing).
+- Dtypes clarified: categorical codes cast to nullable `Int64`, `origin` stored as categorical, binary target `target = (num > 0)` added alongside original `num`.
+- Saved outputs: `heart_imputed_sitewise.csv` (primary) and `heart_imputed_simple.csv` (baseline comparison).
 
-3.  **Run the App**
-    To start the Streamlit application, run the following command in your terminal:
-    ```bash
-    streamlit run app.py
-    ```
-    The application will open in a new tab in your default web browser.
+### EDA & Visualization (25%)
+- Dashboard visualizations tied to disease presence (`target`):
+  - Boxplots: `oldpeak` vs target, `thalach` vs target.
+  - Count plot: chest pain type (`cp`) split by target.
+  - Interaction scatter: `oldpeak` vs `thalach`, color-coded by target and faceted by origin (style).
+  - Missingness heatmap for `['chol', 'ca', 'thal', 'origin', 'target']` highlights Switzerland’s structural gaps.
+- Basic statistics section (mean/median/std) for selected vitals plus class balance table per origin.
+- On-page captions explain how each figure supports the “one-size-fits-all is false” narrative.
 
-## How to Deploy on Streamlit Community Cloud
+### Data Processing (15%)
+- Two imputation approaches:
+  - **Site-wise KNN** (primary): StandardScaler → KNN (k=5) per origin.
+  - **Simple per-site median** baseline: most-frequent for categoricals, median for numerics (shown in stability table and toggleable in app).
+- No imputation applied to the label `num`; Switzerland `chol` remains missing under the KNN strategy to respect structural absence.
 
-You can deploy this application for free on Streamlit Community Cloud.
+### Streamlit (25%)
+- Functional app with at least two interactive controls: imputation strategy radio, origin multiselect, age range slider, optional “hide cholesterol” checkbox.
+- Clear narrative text and inline captions explain what to examine and why site-wise handling matters.
+- Includes instructions for deployment (see below) and a polished, clean layout with collapsible previews and captions.
 
-1.  **Push your code to a GitHub repository.**
-2.  **Go to [share.streamlit.io](https://share.streamlit.io) and sign up.**
-3.  **Click on the "New app" button and connect your GitHub account.**
-4.  **Select your repository and the `app.py` file.**
-5.  **Click "Deploy!".**
+### GitHub & Documentation (10%)
+- Organized repository with core files: `prepare.py`, `app.py`, `README.md`, `requirements.txt`, and the original data files.
+- README provides overview, setup steps, rubric mapping, and highlights for graders.
 
-Your application will then be deployed and accessible to anyone with the link.
+### Above & Beyond (+20% potential)
+- Complex missingness highlighted via heatmap and optional “hide cholesterol” control that respects Switzerland’s structural gaps.
+- Stability snapshot contrasts mean `oldpeak`, `thalach`, and `ca` by origin across both imputers.
+- Generalization demo: logistic regression trained on Cleveland only, accuracy/AUC reported for each test site to reveal the generalization gap when relying on Cleveland.
+- Streamlit UI includes captions, toggles, and a data preview expander for a polished feel.
 
-## Datasets
+## File Guide
 
-The project uses two datasets:
+| File | Purpose |
+| --- | --- |
+| `prepare.py` | Loads site CSVs, reports duplicates, performs site-wise imputations (KNN + simple baseline), prints summary tables, saves processed datasets, and runs the generalization demo. |
+| `app.py` | Streamlit dashboard: interactive filtering, disease-linked charts, missingness heatmap, stability snapshot, and generalization results. |
+| `heart_imputed_sitewise.csv` | Output of site-wise KNN pipeline (generated by running `prepare.py`). |
+| `heart_imputed_simple.csv` | Baseline simple imputation output for comparison. |
+| `requirements.txt` | Minimal dependencies for reproducing the workflow. |
+| `heart-disease.names` | Original UCI data dictionary for reference. |
 
--   `dataset1.csv`: Contains information about students' academic performance.
--   `dataset2.csv`: Contains information about students' well-being and mental health.
+## Deployment (Streamlit Community Cloud)
 
-## Project Structure
+1. Push the project to GitHub.
+2. Sign in at [streamlit.io](https://share.streamlit.io/) and select “New app.”
+3. Point to your repository and set the entry point to `app.py`.
+4. Click **Deploy** (ensure `python prepare.py` has been run locally or provide the generated CSVs in the repo).
+
+## Notes for Graders
+
+- Run `python prepare.py` first to regenerate the outputs and view console summaries (duplicate counts, missingness report, stability snapshot, logistic regression metrics).
+- Launch `streamlit run app.py` to explore the interactive narrative.
+- Toggle between imputation strategies to see how Switzerland’s structural cholesterol missingness is preserved (KNN) or filled (simple median), reinforcing that cross-site leakage distorts downstream analyses.
+
+Enjoy exploring why the heart disease benchmark behaves differently once every site gets the care it deserves!*** End Patch
