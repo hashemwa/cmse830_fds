@@ -17,7 +17,8 @@
 
 Summary
 Numerical: age, trestbps, chol, thalach, oldpeak, ca
-Categorical: sex, cp, fbs, restecg, exang, slope, thal, num
+Categorical: sex, cp, fbs, restecg, exang, slope, thal, num, origin, target, cp_label, 
+restecg_label, slope_label, thal_label, num_label
 
 
 Num Values

@@ -1,80 +1,91 @@
-# Midterm Project – UCI Heart Disease Sites
+# 🫀 Heart Disease by Origin — "One Size Fits All" Is False
 
-## Project Overview
+The classic Cleveland-only approach overstates performance. When we add Hungary, Switzerland, and Long Beach VA, we see structured missingness and distribution shifts. One recipe cannot cover every origin.
 
-This project shows why a single rule book does not work for the UCI Heart Disease collection. We combine four local hospital files (Cleveland, Hungary, Switzerland, Long Beach VA), clean them with site-aware rules, and surface the differences through an interactive Streamlit app. The same Python codebase delivers the data prep, the dashboard, and a quick generalization demo.
+## What's in this repo
 
-## Quick Start
+-   `analysis.ipynb` — notebook that builds the combined table per dataset: adds `origin`, adds `target`, drops duplicates, checks missingness by origin, runs imputation (categoricals → mode, numerics → KNN with scaling, Switzerland `chol` left as structural `NaN`), and exports `combined_clean.csv`.
+-   `app.py` — Streamlit dashboard that loads `combined_clean.csv` and tells the story with filters and interactive charts.
+-   `data/` — raw processed UCI files (`cleveland.data`, `hungary.data`, `switzerland.data`, `long_beach_va.data`) where `?` marks missing values.
+-   `combined_clean.csv` — final clean table the app reads (created by the notebook).
+-   `features.txt`, `heart-disease.names`— extra notes and reference material.
 
-```bash
-python prepare.py        # optional: rebuild the cleaned CSVs and print a console summary
-streamlit run app.py     # launch the Streamlit dashboard
+## Install
+
+Use Python 3.9 or newer and install the needed packages:
+
+```         
+pip install pandas numpy seaborn matplotlib scikit-learn streamlit altair plotly
 ```
 
-All paths are relative. Keep the raw `.data` files in the project folder.
+## Run the notebook
 
-## Rubric Alignment
+1.  Open `analysis.ipynb` in Jupyter (VSCode Highly Recommended) and run all cells.
 
-### Data Collection & Preparation (25%)
-- Four distinct sources: `cleveland.data`, `hungary.data`, `switzerland.data`, `long_beach_va.data`, each tagged with an `origin` column.
-- Duplicate diagnostics per site (exact matches, feature-only matches, conflicting labels) with exact duplicates removed.
-- Missing data rules: Switzerland `chol==0` converted to `NaN`; categorical codes imputed with per-site `SimpleImputer(most_frequent)`; numeric fields imputed with per-site `StandardScaler` → `KNNImputer(k=5)` → inverse scaling (Switzerland `chol` excluded from KNN and left missing).
-- Data types: categorical codes stored as nullable `Int64`, `origin` as categorical, binary target `target = (num > 0)` alongside the original `num`.
-- Saved outputs: `heart_imputed_sitewise.csv` (primary) and `heart_imputed_simple.csv` (baseline).
+2.  The notebook:
 
-### Exploratory Data Analysis & Visualization (25%)
-- Three+ visualization types in the app, all tied to `target`:
-  - Box plots for `oldpeak` and `thalach` vs disease status.
-  - Grouped bar chart for chest pain code (`cp`) vs disease status.
-  - Interaction scatter (`oldpeak` vs `thalach`) colored by disease status and marked by origin.
-  - Missingness heatmap for `['chol', 'ca', 'thal', 'origin', 'target']` highlighting Switzerland’s structural gaps.
-- Summary tables show mean/median/std for key vitals and class balance per origin.
-- Captions and short notes explain what each chart reveals about the “one-size-fits-all” claim.
+    -   loads each dataset, adds the `origin`, and keeps both `num` and `target = (num > 0)`;
+    -   checks missing values overall and by origin to highlight gaps;
+    -   runs a simple imputer and a KNN imputer, keeping the KNN result as `df_final`;
+    -   clips coded fields to valid ranges and adds human-friendly labels (`cp_label`, `num_label`, etc.);
+    -   prints tables and charts that show how the datasets drift apart.
 
-### Data Processing (15%)
-- Two imputation strategies:
-  - Site-wise KNN (primary) with StandardScaler and KNN (k=5) per site.
-  - Simple per-site median baseline for comparison in the app.
-- Labels are not imputed; Switzerland cholesterol remains missing in the KNN output so the structured gap stays visible.
+3.  Export the clean table for the app:
 
-### Streamlit App Development (25%)
-- Functional dashboard with at least two interactive controls: imputation toggle, origin multiselect, age slider, and an optional “hide cholesterol” checkbox.
-- Story tab, explorer tab, missing-data tab, data-prep tab, and model tab with plain-language documentation.
-- Auto-preparation runs on app load; download buttons supply the cleaned CSVs. Deployment instructions are below.
+    ```         
+    df_final.to_csv("combined_clean.csv", index=False)
+    ```
 
-### GitHub Repository (10%)
-- Organized repo with `app.py`, `prepare.py`, `requirements.txt`, `README.md`, and the raw `.data` files.
-- README covers the project overview, rubric alignment, setup steps, and deployment notes.
+    Expect about 918–920 rows depending on deduping and the exact source files. Keep `combined_clean.csv` in the project root next to `app.py`.
 
-### Above & Beyond Opportunities (+20% potential)
-- Complex missingness conveyed through the heatmap and the “hide cholesterol” option (Switzerland remains missing under site-wise KNN).
-- Stability snapshot compares mean `oldpeak`, `thalach`, and `ca` across both imputers.
-- Generalization demo trains a logistic regression on Cleveland only and reports accuracy/AUC on the other sites, showing the generalization gap.
-- App layout uses tabs, metrics, captions, and download buttons for a polished presentation.
+## Use the app
 
-## File Guide
+1.  Make sure `combined_clean.csv` sits next to `app.py`.
 
-| File | Purpose |
-| --- | --- |
-| `app.py` | Contains the full pipeline (loading, deduping, imputing) and the Streamlit UI. Run with `streamlit run app.py`. |
-| `prepare.py` | CLI helper that calls the shared pipeline, saves the CSVs, and prints a quick summary. |
-| `heart_imputed_sitewise.csv` | Site-wise KNN output (created on-demand by the pipeline). |
-| `heart_imputed_simple.csv` | Simple per-site median baseline (also created on-demand). |
-| `requirements.txt` | Minimal dependency list: pandas, numpy, scikit-learn, streamlit, plotly. |
-| `heart-disease.names` | Original UCI data dictionary for reference. |
+2.  Launch the dashboard:
 
-## Deployment (Streamlit Community Cloud)
+    ```         
+    streamlit run app.py
+    ```
 
-1. Push the repo to GitHub.
-2. Sign in at [share.streamlit.io](https://share.streamlit.io) and select **New app**.
-3. Choose your repo, main branch, and `app.py` entry point.
-4. (Optional) run `python prepare.py` locally first so the CSVs are committed; otherwise, the app will generate them on first load.
-5. Click **Deploy**. The URL can be shared with classmates or graders.
+3.  Explore the tabs:
 
-## Notes for Presenters and Graders
+    -   **Sidebar filters:** choose origins and an age range.
+    -   **Metrics:** row counts plus disease prevalence by origin.
+    -   **Distributions:** smooth area density curves (KDE) for a chosen numeric variable (e.g., `trestbps`, `chol`, `thalach`, `oldpeak`) by origin, with per-origin medians shown above the chart.
+    -   **Relationships:** Max heart rate (`thalach`) vs age with per-origin LOESS trend lines, highlighting that the relationship’s slope/curvature differs across datasets.
+    -   **Categoricals:** stacked, normalized bar charts by origin for a selected labeled feature (e.g., `cp_label`, `restecg_label`, `slope_label`, `thal_label`, `num_label`), showing composition differences across selections.
+    -   **Data & Download:** preview the filtered table and export a CSV.
+    -   **Prevalence:** shows the gap across datasets. The final proof that "one size fits all" fails.
 
-- The dashboard auto-runs the cleaning steps at startup. Use the download buttons if you want the processed CSVs.
-- Switch between “Site-wise KNN” and “Simple median” to compare imputers and highlight Switzerland’s missing cholesterol.
-- The Model tab reveals how a Cleveland-only model drops in accuracy and AUC on other sites, reinforcing the main story.
+## Methods
 
-Enjoy presenting how local context changes the heart disease diagnosis story!*** End Patch
+-   **Duplicates:** drop exact duplicates per dataset. Only two rows were dropped.
+-   **Missingness:** convert `?` to `NaN`; treat Switzerland `chol == 0` as structural missing (leave as `NaN`).
+-   **Imputation (per dataset):**
+    -   Categoricals (`sex`, `cp`, `fbs`, `restecg`, `exang`, `slope`, `thal`) → most frequent value.
+    -   Numerics (`age`, `trestbps`, `chol`, `thalach`, `oldpeak`, `ca`) → KNN (`k=5`) with `StandardScaler` (scale → KNN → inverse scale).
+    -   Switzerland: exclude `chol` from the KNN distance so it stays `NaN`.
+-   **Target:** `target = 1` when `num > 0`, else `0`.
+-   **Encoding:** categorical codes stored as pandas `Int64`; `origin` stored as a categorical field.
+
+## Rubric mapping
+
++-------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Requirement                         | Where it's covered                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
++:===================================:+:============================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================+
+| \                                   | **`analysis.ipynb`**: loads **4 UCI datasets** (Cleveland, Hungary, Long Beach VA, Switzerland), adds `origin`, **drops duplicates** with `.drop_duplicates()`, builds **`combined_clean.csv`**.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Data Collection & Preparation (25%) |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
++-------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| EDA & Visualization (25%)           | **`analysis.ipynb`**: summary tables (`describe`, groupby-describe), seaborn **KDE** comparisons, boxplots; **Missingness by origin × column** heatmap. **App (`app.py`)**: **Distributions (KDE areas)**, **Relationships** (per-origin LOESS line for `thalach` vs `age`), **Categoricals** (stacked % bars), **Prevalence** by origin, **Data & Download**.                                                                                                                                                                                                                                                                                                                                                                              |
++-------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Data Processing (15%)               | **Per-dataset imputation** functions in notebook: **KNN** on **continuous numeric** features (`age, trestbps, chol, thalach, oldpeak, ca`), **mode** for **categorical/ordinal/nominal** (`sex, cp, fbs, restecg, exang, slope, thal`). **`target` and `num` are excluded from KNN distance** to avoid leakage.                                                                                                                                                                                                                                                                                                                                                                                                                             |
++-------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| \                                   | **`app.py`**: interactive **origin** and **age** filters; multiple tabs (Distributions, Relationships, Categoricals, Data & Download, Prevalence); metrics (rows, prevalence); tooltips; CSV download.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Streamlit App (25%)                 |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
++-------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| \                                   | Organized repo with **`analysis.ipynb`**, **`app.py`**, **`data/`**, **`combined_clean.csv`** (or instructions to regenerate), and a clear **README** (install, run notebook, export CSV, run app).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| GitHub Repository (10%)             |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
++-------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Above & Beyond (+25%)               | We **impute** each dataset separately using **two methods** (Simple and KNN). We make sure categorical (nominal/ordinal) columns use only their allowed values (for example: `cp` = 1–4, `restecg` = 0–2, `slope` = 1–3, `ca` = 0–3, `thal` = 3/6/7). When using KNN, we **do not include `target` or `num`** so they don’t influence how missing values are filled. We show what’s **missing** in each dataset and why that matters. The Streamlit app is **interactive** (filters, tooltips, visuals, etc.) and a user friendly interface. We compare patterns across Cleveland, Hungary, Switzerland, and Long Beach VA; the clear shifts in prevalence, distributions, and missingness show that a single approach does not generalize. |
++-------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
