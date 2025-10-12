@@ -14,3 +14,20 @@
 | 12 | **ca**       | # of major vessels (0–3) colored by fluoroscopy.      | **Numerical (discrete integer)**  | `0, 1, 2, 3`                                                                       |
 | 13 | **thal**     | Thalassemia status.                                   | **Categorical (nominal)**         | `3 = normal`, `6 = fixed defect`, `7 = reversible defect`                          |
 | 14 | **num**      | Diagnosis (angiographic disease status) — **target**. | **Categorical (binary/ordinal*)** | Commonly `0 = <50% narrowing`, `1 = >50% narrowing` (**some versions use 0–4**)    |
+
+Summary
+Numerical: age, trestbps, chol, thalach, oldpeak, ca
+Categorical: sex, cp, fbs, restecg, exang, slope, thal, num
+
+
+Num Values
+
+| Value | Meaning                                     | Notes                           |
+| ----: | ------------------------------------------- | ------------------------------- |
+| **0** | **No disease** (`< 50%` diameter narrowing) | Negative class                  |
+| **1** | **Disease present** (`> 50%`), **mild**     | Positive class; lowest severity |
+| **2** | **Disease present**, **moderate**           | Increasing severity             |
+| **3** | **Disease present**, **severe**             | Higher severity                 |
+| **4** | **Disease present**, **very severe**        | Highest severity                |
+
+
