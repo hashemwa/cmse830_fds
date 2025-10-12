@@ -4,6 +4,9 @@ import pandas as pd
 import numpy as np
 import altair as alt
 
+# Increase Altair max rows to handle larger datasets
+alt.data_transformers.disable_max_rows()
+
 st.set_page_config(page_title="Heart EDA — One Size ≠ Fits All", layout="wide")
 
 # ---------------------- Header & Docs ----------------------
@@ -116,8 +119,10 @@ with tab1:
                 dist_var, as_=[dist_var, "density"], groupby=["origin"]
             )
             dens = base.mark_area(opacity=0.35).encode(
-                x=alt.X(f"{dist_var}:Q", title=dist_var),
-                y="density:Q",
+                x=alt.X(
+                    f"{dist_var}:Q", title=dist_var, axis=alt.Axis(gridOpacity=0.3)
+                ),
+                y=alt.Y("density:Q", axis=alt.Axis(gridOpacity=0.3)),
                 color=alt.Color("origin:N", legend=alt.Legend(title="Origin")),
             )
             # Median rules by origin
@@ -145,7 +150,12 @@ with tab1:
                 alt.Chart(dfv)
                 .transform_density(dist_var, as_=[dist_var, "density"])
                 .mark_area(opacity=0.35)
-                .encode(x=alt.X(f"{dist_var}:Q", title=dist_var), y="density:Q")
+                .encode(
+                    x=alt.X(
+                        f"{dist_var}:Q", title=dist_var, axis=alt.Axis(gridOpacity=0.3)
+                    ),
+                    y=alt.Y("density:Q", axis=alt.Axis(gridOpacity=0.3)),
+                )
             )
             st.altair_chart(dens.properties(height=360), use_container_width=True)
     else:
@@ -164,8 +174,16 @@ with tab2:
             alt.Chart(prev)
             .mark_bar()
             .encode(
-                x=alt.X("Origin:N", title="Origin"),
-                y=alt.Y("Prevalence (%):Q", title="Prevalence (%)"),
+                x=alt.X(
+                    "Origin:N",
+                    title="Origin",
+                    axis=alt.Axis(labelAngle=0),
+                ),
+                y=alt.Y(
+                    "Prevalence (%):Q",
+                    title="Prevalence (%)",
+                    axis=alt.Axis(gridOpacity=0.5),
+                ),
                 tooltip=["Origin", "n", "Prevalence (%)"],
             )
         )
@@ -181,12 +199,17 @@ with tab3:
     st.subheader("Max Heart Rate vs Age (colored by target) + per-origin trends")
     needed_cols = {"age", "thalach", "target", "origin"}
     if needed_cols.issubset(dfv.columns):
+        # Scatter plot colored by target
         scat = (
             alt.Chart(dfv)
             .mark_circle(size=42, opacity=0.35)
             .encode(
-                x=alt.X("age:Q", title="Age (years)"),
-                y=alt.Y("thalach:Q", title="Max Heart Rate (thalach)"),
+                x=alt.X("age:Q", title="Age (years)", axis=alt.Axis(gridOpacity=0.3)),
+                y=alt.Y(
+                    "thalach:Q",
+                    title="Max Heart Rate (thalach)",
+                    axis=alt.Axis(gridOpacity=0.3),
+                ),
                 color=alt.Color("target:N", legend=alt.Legend(title="Target (0/1)")),
                 tooltip=[
                     "origin",
@@ -198,6 +221,7 @@ with tab3:
                     "target",
                 ],
             )
+            .properties(height=380)
             .interactive()
         )
 
@@ -205,14 +229,23 @@ with tab3:
         trend = (
             alt.Chart(dfv)
             .transform_loess("age", "thalach", groupby=["origin"])
-            .mark_line()
-            .encode(x="age:Q", y="thalach:Q", color="origin:N")
+            .mark_line(size=3)
+            .encode(
+                x=alt.X("age:Q", title="Age (years)", axis=alt.Axis(gridOpacity=0.3)),
+                y=alt.Y(
+                    "thalach:Q",
+                    title="Max Heart Rate (thalach)",
+                    axis=alt.Axis(gridOpacity=0.3),
+                ),
+                color=alt.Color("origin:N", legend=alt.Legend(title="Origin")),
+            )
+            .properties(height=380)
         )
 
-        st.altair_chart(
-            (scat & trend).resolve_scale(color="independent").properties(height=380),
-            use_container_width=True,
-        )
+        # Layer them together
+        combined = scat + trend
+        st.altair_chart(combined, use_container_width=True)
+
         st.caption(
             "Slope/curvature varies by origin → relationships are not universal."
         )
@@ -255,7 +288,7 @@ with tab4:
         st.dataframe(dfv.head(500))
 
     st.download_button(
-        "⬇️ Download filtered data (CSV)",
+        "Download filtered data (CSV)",
         dfv.to_csv(index=False),
         file_name="filtered.csv",
         mime="text/csv",
