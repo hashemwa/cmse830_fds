@@ -64,7 +64,12 @@ with st.sidebar:
     origin_opts = (
         sorted(df["origin"].dropna().unique()) if "origin" in df.columns else []
     )
-    origin_sel = st.multiselect("Origins", options=origin_opts, default=origin_opts)
+
+    # Create checkboxes for each origin in a single column
+    origin_sel = []
+    for origin in origin_opts:
+        if st.checkbox(origin, value=True, key=f"origin_{origin}"):
+            origin_sel.append(origin)
 
     if "age" in df.columns and df["age"].notna().any():
         a_min, a_max = int(np.nanmin(df["age"])), int(np.nanmax(df["age"]))
@@ -89,16 +94,24 @@ if "origin" in dfv.columns:
     dfv["origin"] = pd.Categorical(dfv["origin"], categories=origin_order, ordered=True)
 
 # ---------------------- Top Metrics & Narrative Anchor ----------------------
-c1, c2, c3 = st.columns(3)
+c1, c2, c3, c4 = st.columns(4)
 c1.metric("Rows (filtered)", f"{len(dfv):,}")
 if "target" in dfv.columns and dfv["target"].notna().any():
-    c2.metric("Prevalence (target=1)", f"{100 * dfv['target'].mean():.1f}%")
+    c2.metric("Overall Prevalence", f"{100 * dfv['target'].mean():.1f}%")
 if {"origin", "target"}.issubset(dfv.columns):
     by_origin = dfv.groupby("origin")["target"].mean().mul(100)
     if len(by_origin):
         c3.metric(
-            "Prevalence range by origin",
-            f"{by_origin.min():.1f}%–{by_origin.max():.1f}%",
+            "Lowest Prevalence",
+            f"{by_origin.min():.1f}%",
+            delta=by_origin.idxmin(),
+            delta_color="off",
+        )
+        c4.metric(
+            "Highest Prevalence",
+            f"{by_origin.max():.1f}%",
+            delta=by_origin.idxmax(),
+            delta_color="off",
         )
 
 st.markdown(
@@ -538,4 +551,5 @@ with tab4:
         dfv.to_csv(index=False),
         file_name="filtered.csv",
         mime="text/csv",
+        icon=":material/download:",
     )
