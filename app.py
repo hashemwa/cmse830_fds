@@ -102,7 +102,7 @@ if {"origin", "target"}.issubset(dfv.columns):
         )
 
 st.markdown(
-    "> **Key idea:** Origins differ in **prevalence**, **distributions**, **relationships**, and **categorical mix**. "
+    "> **Key idea:** Origins differ in *distributions*, **relationships**, **categorical mix**, and **prevalence**. "
     "A model trained on a single source (e.g., **Cleveland** only) may not generalize."
 )
 
@@ -149,21 +149,23 @@ with tab1:
     ]
     if dist_candidates:
         dist_var = st.selectbox(
-            "Select variable to visualize:",
+            "Choose a numerical variable:",
             options=dist_candidates,
             index=0,
             key="dist_var_selector",
         )
         title_suffix = f" {units.get(dist_var, '')}"
         var_display_name = var_labels.get(dist_var, dist_var)
-        st.subheader(f"Distribution of {var_display_name}{title_suffix} by Origin")
+        st.subheader(f"Distribution of {var_display_name} by Origin")
 
         if "origin" in dfv.columns:
             # Display medians in a nicer format
             medians = dfv.groupby("origin")[dist_var].median().round(2)
             cols = st.columns(len(medians))
             for idx, (origin, median_val) in enumerate(medians.items()):
-                cols[idx].metric(f"{origin}", f"{median_val:.1f}")
+                cols[idx].metric(
+                    f"{origin}", f"{median_val:.1f}", delta="median", delta_color="off"
+                )
 
             # Create smooth density curves for each origin using KDE
             from scipy.stats import gaussian_kde
@@ -265,7 +267,6 @@ with tab1:
             st.caption(
                 "Medians and shapes differ across origins → evidence against a one-source view."
             )
-            st.dataframe(dfv.groupby("origin")[dist_var].describe().round(2))
         else:
             # Fallback single distribution
             data = dfv[dist_var].dropna()
@@ -298,10 +299,10 @@ with tab1:
 
 # ---------- Tab 5: Prevalence (target differences across origins) ----------
 with tab5:
-    st.subheader("Heart Disease Prevalence (target=1) by Origin")
+    st.subheader("Heart Disease Prevalence by Origin")
     if {"origin", "target"}.issubset(dfv.columns) and dfv["target"].notna().any():
         prev = dfv.groupby("origin")["target"].agg(["mean", "count"]).reset_index()
-        prev["Prevalence (%)"] = (100 * prev["mean"]).round(1)
+        prev["Prevalence (target)"] = (100 * prev["mean"]).round(1)
         prev = prev.rename(columns={"origin": "Origin", "count": "n"})
         bar = (
             alt.Chart(prev)
@@ -313,11 +314,19 @@ with tab5:
                     axis=alt.Axis(labelAngle=0),
                 ),
                 y=alt.Y(
-                    "Prevalence (%):Q",
-                    title="Prevalence (%)",
-                    axis=alt.Axis(gridOpacity=0.5),
+                    "Prevalence (target):Q",
+                    title="Prevalence (target)",
+                    axis=alt.Axis(
+                        gridOpacity=0.5, format=".0f", labelExpr="datum.value + '%'"
+                    ),
                 ),
-                tooltip=["Origin", "n", "Prevalence (%)"],
+                tooltip=[
+                    "Origin",
+                    "n",
+                    alt.Tooltip(
+                        "Prevalence (target):Q", format=".1f", title="Prevalence (%)"
+                    ),
+                ],
             )
         )
         st.altair_chart(bar.properties(height=450), use_container_width=True)
@@ -329,7 +338,7 @@ with tab5:
 
 # ---------- Tab 2: Relationships (age ↔ physiology, colored by target) ----------
 with tab2:
-    st.subheader("Max Heart Rate vs Age (colored by target) + per-origin trends")
+    st.subheader("Max Heart Rate vs Age by Origin")
     needed_cols = {"age", "thalach", "target", "origin"}
     if needed_cols.issubset(dfv.columns):
         # Create a selection for multi-line tooltip
@@ -413,6 +422,16 @@ with tab3:
         for c in ["cp_label", "restecg_label", "slope_label", "thal_label", "num_label"]
         if c in dfv.columns
     ]
+
+    # Descriptive titles for legend
+    legend_titles = {
+        "cp_label": "Chest Pain Type",
+        "restecg_label": "Resting ECG",
+        "slope_label": "ST Segment Slope",
+        "thal_label": "Thalassemia",
+        "num_label": "Disease Severity",
+    }
+
     if cat_candidates:
         cat_var = st.selectbox(
             "Choose a categorical variable:",
@@ -446,7 +465,7 @@ with tab3:
                     x=alt.X("origin:N", title="Origin", axis=alt.Axis(labelAngle=0)),
                     y=alt.Y(
                         "pct:Q",
-                        title="Percent within origin",
+                        title="Percent Within Origin",
                         stack="normalize",
                         axis=alt.Axis(gridOpacity=0.5),
                     ),
@@ -454,7 +473,8 @@ with tab3:
                     color=alt.Color(
                         f"{cat_var}:N",
                         legend=alt.Legend(
-                            title=cat_var.replace("_", " "), symbolType="circle"
+                            title=legend_titles.get(cat_var, cat_var.replace("_", " ")),
+                            symbolType="circle",
                         ),
                         scale=alt.Scale(domain=ORDERS.get(cat_var)),  # <- key line
                     ),
