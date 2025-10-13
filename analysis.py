@@ -301,8 +301,14 @@ df_final = (
 
 
 # ==================== Streamlit App Content ====================
+# clean data for visualization
 def get_clean_data(k=5):
     return df_final.copy()
+
+
+# raw data for missingness
+def get_raw_data():
+    return df_combined.copy()
 
 
 # colors for origins
@@ -411,6 +417,11 @@ def kde_by_origin(df, col):
                     range=list(COLOR_MAP.values()),
                 ),
             ),
+            tooltip=[
+                alt.Tooltip("Origin:N", title="Origin"),
+                alt.Tooltip(f"{x_axis_label}:Q", title=x_axis_label, format=".2f"),
+                alt.Tooltip("Density:Q", title="Density", format=".4f"),
+            ],
         )
         .properties(height=400)
     )
@@ -454,8 +465,8 @@ def thalach_vs_age_trend(df):
         .encode(
             opacity=alt.condition(hover, alt.value(1), alt.value(0)),
             tooltip=[
-                alt.Tooltip("age:Q", title="Age", format=".0f"),
                 alt.Tooltip("origin:N", title="Origin"),
+                alt.Tooltip("age:Q", title="Age", format=".0f"),
                 alt.Tooltip("thalach:Q", title="Max Heart Rate", format=".1f"),
             ],
         )
@@ -496,7 +507,7 @@ def stacked_categorical(df, cat_col):
     cat_df = df_copy.groupby(["origin", cat_col]).size().reset_index(name="n")
     cat_df["pct"] = cat_df.groupby("origin")["n"].transform(lambda x: 100 * x / x.sum())
 
-    # Optional: a numeric rank for bullet-proof stack ordering
+    # order categories stack within each bar
     if cat_col in CATEGORY_ORDERS:
         cat_df["cat_rank"] = cat_df[cat_col].cat.codes
 
@@ -523,7 +534,7 @@ def stacked_categorical(df, cat_col):
             if "cat_rank" in cat_df.columns
             else alt.Undefined,
             tooltip=[
-                "origin",
+                alt.Tooltip("origin:N", title="Origin"),
                 alt.Tooltip(f"{cat_col}:N", title=cat_col.replace("_", " ")),
                 alt.Tooltip("n:Q", title="Count"),
                 alt.Tooltip("pct:Q", title="Percent", format=".1f"),
@@ -557,8 +568,8 @@ def prevalence_bar(df):
                 ),
             ),
             tooltip=[
-                "Origin",
-                "n",
+                alt.Tooltip("Origin:N", title="Origin"),
+                alt.Tooltip("n:Q", title="N"),
                 alt.Tooltip(
                     "Prevalence (target):Q", format=".1f", title="Prevalence (%)"
                 ),
@@ -571,9 +582,51 @@ def prevalence_bar(df):
 
 
 def missingness_heatmap(df, cols):
-    fig, ax = plt.subplots(figsize=(12, 6))
-    sns.heatmap(df[cols].isnull(), cbar=False, cmap="viridis", ax=ax)
-    ax.set_title("Missingness Heatmap")
-    ax.set_xlabel("Features")
-    ax.set_ylabel("Samples")
-    return fig
+    # missingness rate by origin for each column
+    miss_by_origin = df.groupby("origin")[cols].apply(lambda g: g.isna().mean() * 100)
+
+    miss_long = miss_by_origin.reset_index().melt(
+        id_vars="origin", var_name="Column", value_name="Missing (%)"
+    )
+
+    heatmap = (
+        alt.Chart(miss_long)
+        .mark_rect()
+        .encode(
+            x=alt.X("origin:N", title="Origin", axis=alt.Axis(labelAngle=0)),
+            y=alt.Y("Column:N", title="Feature"),
+            color=alt.Color(
+                "Missing (%):Q",
+                scale=alt.Scale(scheme="viridis", domain=[0, 100]),
+                legend=alt.Legend(title="% Missing"),
+            ),
+            tooltip=[
+                alt.Tooltip("origin:N", title="Origin"),
+                alt.Tooltip("Column:N", title="Feature"),
+                alt.Tooltip("Missing (%):Q", title="Missing %", format=".1f"),
+            ],
+        )
+        .properties(height=500)
+    )
+
+    text = (
+        alt.Chart(miss_long)
+        .mark_text(baseline="middle")
+        .encode(
+            x=alt.X("origin:N"),
+            y=alt.Y("Column:N"),
+            text=alt.Text("Missing (%):Q", format=".1f"),
+            color=alt.condition(
+                alt.datum["Missing (%)"] > 50,
+                alt.value("black"),
+                alt.value("#f7f7f7"),
+            ),
+            tooltip=[
+                alt.Tooltip("origin:N", title="Origin"),
+                alt.Tooltip("Column:N", title="Feature"),
+                alt.Tooltip("Missing (%):Q", title="Missing %", format=".1f"),
+            ],
+        )
+    )
+
+    return heatmap + text

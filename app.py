@@ -5,10 +5,12 @@ import numpy as np
 import altair as alt
 from analysis import (
     get_clean_data,
+    get_raw_data,
     kde_by_origin,
     thalach_vs_age_trend,
     stacked_categorical,
     prevalence_bar,
+    missingness_heatmap,
 )
 
 # Allow large datasets
@@ -132,13 +134,30 @@ st.markdown(
 
 
 # ---------------------- Tabs ----------------------
-tab1, tab2, tab3, tab4, tab5 = st.tabs(
-    ["Distributions", "Relationships", "Categoricals", "Data & Download", "Prevalence"]
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
+    [
+        "Prevalence",
+        "Distributions",
+        "Relationships",
+        "Categoricals",
+        "Missingness",
+        "Data",
+    ]
 )
 
-
-# ---------- Tab 1: Distributions ----------
 with tab1:
+    st.subheader("Heart Disease Prevalence by Origin")
+    if {"origin", "target"}.issubset(dfv.columns) and dfv["target"].notna().any():
+        # Use the plotting function from analysis.py
+        bar = prevalence_bar(dfv)
+        st.altair_chart(bar, use_container_width=True)
+        st.caption(
+            "Different base rates across sources → a single-source model mis-estimates risk elsewhere."
+        )
+    else:
+        st.info("`origin` and/or `target` not available for prevalence chart.")
+
+with tab2:
     # Mapping of variable names to descriptive labels
     var_labels = {
         "trestbps": "Resting Blood Pressure",
@@ -214,22 +233,7 @@ with tab1:
             "No numeric variables found for distribution (trestbps/chol/thalach/oldpeak)."
         )
 
-
-# ---------- Tab 5: Prevalence (target differences across origins) ----------
-with tab5:
-    st.subheader("Heart Disease Prevalence by Origin")
-    if {"origin", "target"}.issubset(dfv.columns) and dfv["target"].notna().any():
-        # Use the plotting function from analysis.py
-        bar = prevalence_bar(dfv)
-        st.altair_chart(bar, use_container_width=True)
-        st.caption(
-            "Different base rates across sources → a single-source model mis-estimates risk elsewhere."
-        )
-    else:
-        st.info("`origin` and/or `target` not available for prevalence chart.")
-
-# ---------- Tab 2: Relationships (age ↔ physiology, colored by target) ----------
-with tab2:
+with tab3:
     st.subheader("Max Heart Rate vs Age by Origin")
     needed_cols = {"age", "thalach", "target", "origin"}
     if needed_cols.issubset(dfv.columns):
@@ -243,9 +247,8 @@ with tab2:
     else:
         st.info("Need columns: age, thalach, target, origin.")
 
-# ---------- Tab 3: Categoricals ----------
-with tab3:
-    st.subheader("Categorical feature mix by origin")
+with tab4:
+    st.subheader("Categorical Variable Mix by Origin")
     cat_candidates = [
         c
         for c in ["cp_label", "restecg_label", "slope_label", "thal_label", "num_label"]
@@ -272,10 +275,56 @@ with tab3:
     else:
         st.info("No label columns found (e.g., cp_label, thal_label).")
 
+with tab5:
+    st.subheader("Percentage of Missing Values by Origin")
 
-# ---------- Tab 4: Data & Download ----------
-with tab4:
-    st.subheader("Filtered data preview")
+    # combined data before imputation
+    df_raw = get_raw_data()
+
+    mask_raw = pd.Series(True, index=df_raw.index)
+    if origin_sel and "origin" in df_raw.columns:
+        mask_raw &= df_raw["origin"].isin(origin_sel)
+    if age_range and "age" in df_raw.columns:
+        mask_raw &= df_raw["age"].between(*age_range)
+    df_raw_filtered = df_raw.loc[mask_raw].copy()
+
+    if df_raw_filtered.isnull().values.any():
+        num_cols = [
+            c
+            for c in [
+                "age",
+                "sex",
+                "cp",
+                "trestbps",
+                "chol",
+                "fbs",
+                "restecg",
+                "thalach",
+                "exang",
+                "oldpeak",
+                "slope",
+                "ca",
+                "thal",
+                "num",
+            ]
+            if c in df_raw_filtered.columns
+        ]
+        chart = missingness_heatmap(df_raw_filtered, num_cols)
+        st.altair_chart(chart, use_container_width=True)
+
+        st.caption(
+            "Missingness varies by origin → preprocess and select features per origin; a single imputation recipe can bias results."
+        )
+        st.caption(
+            "This heatmap shows the **percentage of missing values** in the original raw data before KNN imputation, "
+            "organized by origin and column. The current dataset shown in other tabs has all missing values filled in."
+        )
+
+    else:
+        st.success("✅ No missing values in the filtered raw data!")
+
+with tab6:
+    st.subheader("Filtered Data Preview")
     show_cols = [
         c
         for c in [
