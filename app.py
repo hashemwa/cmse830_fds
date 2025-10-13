@@ -3,6 +3,13 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import altair as alt
+from analysis import (
+    get_clean_data,
+    kde_by_origin,
+    thalach_vs_age_trend,
+    stacked_categorical,
+    prevalence_bar,
+)
 
 # Allow large datasets
 alt.data_transformers.disable_max_rows()
@@ -32,7 +39,11 @@ Switzerland** to show how **prevalence** and **distributions** differ by **origi
 # ---------------------- Load Data ----------------------
 @st.cache_data
 def load_data(path="combined_clean.csv"):
-    return pd.read_csv(path)
+    """Load data from CSV (fallback) or use analysis.py's get_clean_data()"""
+    try:
+        return pd.read_csv(path)
+    except FileNotFoundError:
+        return get_clean_data(k=5)
 
 
 try:
@@ -125,26 +136,6 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs(
     ["Distributions", "Relationships", "Categoricals", "Data & Download", "Prevalence"]
 )
 
-# Desired category orders
-ORDERS = {
-    "cp_label": [
-        "typical angina",
-        "atypical angina",
-        "non-anginal pain",
-        "asymptomatic",
-    ],
-    "restecg_label": ["normal", "ST–T wave abnormality (>0.05 mV)", "LVH by Estes"],
-    "slope_label": ["upsloping", "flat", "downsloping"],
-    "thal_label": ["normal", "fixed defect", "reversible defect"],
-    "num_label": [
-        "no heart disease",
-        "mild heart disease",
-        "moderate heart disease",
-        "severe heart disease",
-        "critical heart disease",
-    ],
-}
-
 
 # ---------- Tab 1: Distributions ----------
 with tab1:
@@ -180,102 +171,15 @@ with tab1:
                     f"{origin}", f"{median_val:.1f}", delta="median", delta_color="off"
                 )
 
-            # Create smooth density curves for each origin using KDE
-            from scipy.stats import gaussian_kde
+            # Use the plotting function from analysis.py
+            chart = kde_by_origin(dfv, dist_var)
 
-            density_data = {}
-            x_min = dfv[dist_var].min()
-            x_max = dfv[dist_var].max()
-
-            # Handle edge case where all values are the same
-            if x_max - x_min < 1e-10:
-                st.warning(
-                    f"All values for {dist_var} are approximately the same. Cannot show distribution."
-                )
+            if chart is not None:
+                st.altair_chart(chart, use_container_width=True)
             else:
-                # Create 200 smooth points for x-axis
-                x_smooth = np.linspace(x_min, x_max, 200)
-
-                for origin in sorted(dfv["origin"].unique()):
-                    origin_data = dfv[dfv["origin"] == origin][dist_var].dropna().values
-                    if len(origin_data) > 1 and origin_data.std() > 1e-10:
-                        try:
-                            # Use gaussian KDE for smooth density curves
-                            kde = gaussian_kde(origin_data, bw_method="scott")
-                            density = kde(x_smooth)
-                            density_data[origin] = density
-                        except (np.linalg.LinAlgError, ValueError):
-                            # Fallback to interpolated histogram if KDE fails
-                            bins = np.linspace(origin_data.min(), origin_data.max(), 50)
-                            counts, _ = np.histogram(
-                                origin_data, bins=bins, density=True
-                            )
-                            bin_centers = (bins[:-1] + bins[1:]) / 2
-                            density_data[origin] = np.interp(
-                                x_smooth, bin_centers, counts
-                            )
-
-                # Only show chart if we have data
-                if density_data:
-                    # Create DataFrame for Altair chart
-                    x_axis_label = (
-                        f"{var_display_name} {units.get(dist_var, '')}".strip()
-                    )
-
-                    # Reshape data for Altair (long format)
-                    chart_data = []
-                    for origin, density in density_data.items():
-                        for x_val, y_val in zip(x_smooth, density):
-                            chart_data.append(
-                                {
-                                    x_axis_label: x_val,
-                                    "Density": y_val,
-                                    "Origin": origin,
-                                }
-                            )
-                    chart_df = pd.DataFrame(chart_data)
-
-                    # Get dynamic color mapping based on available origins
-                    # Using Tableau10 colors to match the line chart
-                    color_map = {
-                        "Cleveland": "#4c78a8",
-                        "Hungary": "#f58518",
-                        "Long Beach VA": "#54a24b",
-                        "Switzerland": "#e45756",
-                    }
-
-                    # Create Altair area chart
-                    area_chart = (
-                        alt.Chart(chart_df)
-                        .mark_area(opacity=0.6)
-                        .encode(
-                            x=alt.X(
-                                f"{x_axis_label}:Q",
-                                title=x_axis_label,
-                                axis=alt.Axis(grid=False),
-                            ),
-                            y=alt.Y(
-                                "Density:Q",
-                                title="Density",
-                                axis=alt.Axis(gridOpacity=0.5),
-                            ),
-                            color=alt.Color(
-                                "Origin:N",
-                                legend=alt.Legend(title="Origin", orient="right"),
-                                scale=alt.Scale(
-                                    domain=list(color_map.keys()),
-                                    range=list(color_map.values()),
-                                ),
-                            ),
-                        )
-                        .properties(height=400)
-                    )
-
-                    st.altair_chart(area_chart, use_container_width=True)
-                else:
-                    st.warning(
-                        f"Not enough data to display distribution for {dist_var}."
-                    )
+                st.warning(
+                    f"Not enough data variation to display distribution for {dist_var}."
+                )
 
             st.caption(
                 "Medians and shapes differ across origins → evidence against a one-source view."
@@ -310,39 +214,14 @@ with tab1:
             "No numeric variables found for distribution (trestbps/chol/thalach/oldpeak)."
         )
 
+
 # ---------- Tab 5: Prevalence (target differences across origins) ----------
 with tab5:
     st.subheader("Heart Disease Prevalence by Origin")
     if {"origin", "target"}.issubset(dfv.columns) and dfv["target"].notna().any():
-        prev = dfv.groupby("origin")["target"].agg(["mean", "count"]).reset_index()
-        prev["Prevalence (target)"] = (100 * prev["mean"]).round(1)
-        prev = prev.rename(columns={"origin": "Origin", "count": "n"})
-        bar = (
-            alt.Chart(prev)
-            .mark_bar()
-            .encode(
-                x=alt.X(
-                    "Origin:N",
-                    title="Origin",
-                    axis=alt.Axis(labelAngle=0),
-                ),
-                y=alt.Y(
-                    "Prevalence (target):Q",
-                    title="Prevalence (target)",
-                    axis=alt.Axis(
-                        gridOpacity=0.5, format=".0f", labelExpr="datum.value + '%'"
-                    ),
-                ),
-                tooltip=[
-                    "Origin",
-                    "n",
-                    alt.Tooltip(
-                        "Prevalence (target):Q", format=".1f", title="Prevalence (%)"
-                    ),
-                ],
-            )
-        )
-        st.altair_chart(bar.properties(height=450), use_container_width=True)
+        # Use the plotting function from analysis.py
+        bar = prevalence_bar(dfv)
+        st.altair_chart(bar, use_container_width=True)
         st.caption(
             "Different base rates across sources → a single-source model mis-estimates risk elsewhere."
         )
@@ -354,71 +233,8 @@ with tab2:
     st.subheader("Max Heart Rate vs Age by Origin")
     needed_cols = {"age", "thalach", "target", "origin"}
     if needed_cols.issubset(dfv.columns):
-        # Create a selection for multi-line tooltip
-        hover = alt.selection_point(
-            fields=["age"],
-            nearest=True,
-            on="mouseover",
-            empty=False,
-        )
-
-        # Color mapping to match the distribution chart
-        color_map = {
-            "Cleveland": "#4c78a8",
-            "Hungary": "#f58518",
-            "Long Beach VA": "#54a24b",
-            "Switzerland": "#e45756",
-        }
-
-        # Per-origin loess trend lines
-        lines = (
-            alt.Chart(dfv)
-            .transform_loess("age", "thalach", groupby=["origin"])
-            .mark_line(size=3)
-            .encode(
-                x=alt.X("age:Q", title="Age (years)", axis=alt.Axis(grid=False)),
-                y=alt.Y(
-                    "thalach:Q",
-                    title="Max Heart Rate (thalach)",
-                    axis=alt.Axis(gridOpacity=0.5),
-                ),
-                color=alt.Color(
-                    "origin:N",
-                    legend=alt.Legend(title="Origin"),
-                    scale=alt.Scale(
-                        domain=list(color_map.keys()), range=list(color_map.values())
-                    ),
-                ),
-            )
-        )
-
-        # Points that appear on hover
-        points = (
-            lines.mark_point(size=100, filled=True)
-            .encode(
-                opacity=alt.condition(hover, alt.value(1), alt.value(0)),
-                tooltip=[
-                    alt.Tooltip("age:Q", title="Age", format=".0f"),
-                    alt.Tooltip("origin:N", title="Origin"),
-                    alt.Tooltip("thalach:Q", title="Max Heart Rate", format=".1f"),
-                ],
-            )
-            .add_params(hover)
-        )
-
-        # Vertical rule to show where you're hovering
-        rule = (
-            alt.Chart(dfv)
-            .transform_loess("age", "thalach", groupby=["origin"])
-            .mark_rule(color="gray", opacity=0.5)
-            .encode(
-                x="age:Q",
-            )
-            .transform_filter(hover)
-        )
-
-        # Combine all layers
-        chart = (lines + points + rule).properties(height=450)
+        # Use the plotting function from analysis.py
+        chart = thalach_vs_age_trend(dfv)
         st.altair_chart(chart, use_container_width=True)
 
         st.caption(
@@ -436,15 +252,6 @@ with tab3:
         if c in dfv.columns
     ]
 
-    # Descriptive titles for legend
-    legend_titles = {
-        "cp_label": "Chest Pain Type",
-        "restecg_label": "Resting ECG",
-        "slope_label": "ST Segment Slope",
-        "thal_label": "Thalassemia",
-        "num_label": "Disease Severity",
-    }
-
     if cat_candidates:
         cat_var = st.selectbox(
             "Choose a categorical variable:",
@@ -454,56 +261,8 @@ with tab3:
         )
 
         if "origin" in dfv.columns:
-            # Enforce order in the dataframe (helps tooltips/tables)
-            if cat_var in ORDERS:
-                dfv[cat_var] = pd.Categorical(
-                    dfv[cat_var], categories=ORDERS[cat_var], ordered=True
-                )
-
-            cat_df = dfv.groupby(["origin", cat_var]).size().reset_index(name="n")
-            cat_df["pct"] = cat_df.groupby("origin")["n"].transform(
-                lambda x: 100 * x / x.sum()
-            )
-
-            # Optional: a numeric rank for bullet-proof stack ordering
-            if cat_var in ORDERS:
-                cat_df["cat_rank"] = cat_df[
-                    cat_var
-                ].cat.codes  # 0..k-1 in your specified order
-
-            chart = (
-                alt.Chart(cat_df)
-                .mark_bar()
-                .encode(
-                    x=alt.X("origin:N", title="Origin", axis=alt.Axis(labelAngle=0)),
-                    y=alt.Y(
-                        "pct:Q",
-                        title="Percent Within Origin",
-                        stack="normalize",
-                        axis=alt.Axis(gridOpacity=0.5),
-                    ),
-                    # Fixed domain controls legend order AND stack order
-                    color=alt.Color(
-                        f"{cat_var}:N",
-                        legend=alt.Legend(
-                            title=legend_titles.get(cat_var, cat_var.replace("_", " ")),
-                            symbolType="circle",
-                        ),
-                        scale=alt.Scale(domain=ORDERS.get(cat_var)),  # <- key line
-                    ),
-                    # Extra safety: force stack draw order using the rank
-                    order=alt.Order("cat_rank:Q")
-                    if "cat_rank" in cat_df.columns
-                    else alt.Undefined,
-                    tooltip=[
-                        "origin",
-                        alt.Tooltip(f"{cat_var}:N", title=cat_var.replace("_", " ")),
-                        alt.Tooltip("n:Q", title="Count"),
-                        alt.Tooltip("pct:Q", title="Percent", format=".1f"),
-                    ],
-                )
-                .properties(height=400)
-            )
+            # Use the plotting function from analysis.py
+            chart = stacked_categorical(dfv, cat_var)
             st.altair_chart(chart, use_container_width=True)
             st.caption(
                 "Legend and stacked segment order follow the intended clinical sequence."
