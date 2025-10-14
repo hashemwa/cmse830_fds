@@ -10,7 +10,7 @@ from scipy.stats import gaussian_kde
 
 alt.data_transformers.disable_max_rows()
 
-# Create data frames
+# data frames for each dataset
 columns = [
     "age",
     "sex",
@@ -40,13 +40,13 @@ df_switzerland = pd.read_csv(
     "data/switzerland.data", na_values="?", names=columns
 ).drop_duplicates()
 
-# Add origin column to each DataFrame
+# add origin column to each DataFrame
 df_cleveland["origin"] = "Cleveland"
 df_hungary["origin"] = "Hungary"
 df_long_beach_va["origin"] = "Long Beach VA"
 df_switzerland["origin"] = "Switzerland"
 
-# Add target column
+# add target column
 df_cleveland["target"] = (df_cleveland["num"] > 0).astype(int)
 df_hungary["target"] = (df_hungary["num"] > 0).astype(int)
 df_switzerland["target"] = (df_switzerland["num"] > 0).astype(int)
@@ -64,7 +64,7 @@ print(df_hungary.describe())
 print(df_long_beach_va.describe())
 print(df_switzerland.describe())
 
-# Combine all DataFrames
+# combine all DataFrames
 df_combined = pd.concat([df_cleveland, df_hungary, df_switzerland, df_long_beach_va])
 
 print(df_combined.info())
@@ -80,10 +80,10 @@ plt.show()
 
 missing_counts_by_origin = df_combined.groupby("origin").apply(lambda g: g.isna().sum())
 
-# First, let's get the total number of missing values for each origin by summing across the columns (axis=1)
+# total number of missing values for each origin by summing across the columns
 total_missing_by_origin = missing_counts_by_origin.sum(axis=1)
 
-# Now, let's create a bar plot to visualize these totals
+# bar plot to visualize these totals
 plt.figure(figsize=(10, 6))
 sns.barplot(
     x=total_missing_by_origin.index, y=total_missing_by_origin.values, palette="viridis"

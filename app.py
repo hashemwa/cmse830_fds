@@ -321,7 +321,7 @@ with tab5:
         )
 
     else:
-        st.success("✅ No missing values in the filtered raw data!")
+        st.success("No missing values in the filtered raw data!")
 
 with tab6:
     st.subheader("Filtered Data Preview")
