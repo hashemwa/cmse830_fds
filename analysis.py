@@ -52,8 +52,23 @@ df_hungary["target"] = (df_hungary["num"] > 0).astype(int)
 df_switzerland["target"] = (df_switzerland["num"] > 0).astype(int)
 df_long_beach_va["target"] = (df_long_beach_va["num"] > 0).astype(int)
 
+# info
+print(df_cleveland.info())
+print(df_hungary.info())
+print(df_long_beach_va.info())
+print(df_switzerland.info())
+
+# describe
+print(df_cleveland.describe())
+print(df_hungary.describe())
+print(df_long_beach_va.describe())
+print(df_switzerland.describe())
+
 # Combine all DataFrames
 df_combined = pd.concat([df_cleveland, df_hungary, df_switzerland, df_long_beach_va])
+
+print(df_combined.info())
+print(df_combined.describe())
 
 # Missingness Heatmap
 plt.figure(figsize=(12, 6))
@@ -237,11 +252,14 @@ plt.xlabel("Data Source (Origin)")
 plt.ylabel("ST Depression (oldpeak)")
 plt.show()
 
-df_final.describe(include="all")
+print(df_final.info())
+print(df_final.describe(include="all"))
 
-df_final.groupby("origin")[
-    ["age", "trestbps", "chol", "thalach", "oldpeak"]
-].describe().round(2)
+print(
+    df_final.groupby("origin")[["age", "trestbps", "chol", "thalach", "oldpeak"]]
+    .describe()
+    .round(2)
+)
 
 # Missingness Heatmap Imputed
 plt.figure(figsize=(12, 6))
