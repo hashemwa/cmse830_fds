@@ -329,6 +329,46 @@ def get_raw_data():
     return df_combined.copy()
 
 
+# individual raw datasets for IDA display
+def get_individual_raw_datasets():
+    return {
+        "Cleveland": df_cleveland.copy(),
+        "Hungary": df_hungary.copy(),
+        "Long Beach VA": df_long_beach_va.copy(),
+        "Switzerland": df_switzerland.copy(),
+    }
+
+
+# individual simple imputed datasets
+def get_individual_simple_imputed():
+    return {
+        "Cleveland": df_cleveland_simple.copy(),
+        "Hungary": df_hungary_simple.copy(),
+        "Long Beach VA": df_long_beach_va_simple.copy(),
+        "Switzerland": df_switzerland_simple.copy(),
+    }
+
+
+# individual KNN imputed datasets
+def get_individual_knn_imputed():
+    return {
+        "Cleveland": df_cleveland_knn.copy(),
+        "Hungary": df_hungary_knn.copy(),
+        "Long Beach VA": df_long_beach_va_knn.copy(),
+        "Switzerland": df_switzerland_knn.copy(),
+    }
+
+
+# combined simple imputed
+def get_combined_simple_imputed():
+    return df_combined_simple.copy()
+
+
+# combined KNN imputed (before label merging)
+def get_combined_knn_imputed():
+    return df_combined_knn.copy()
+
+
 # colors for origins
 COLOR_MAP = {
     "Cleveland": "#4c78a8",
