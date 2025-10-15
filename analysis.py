@@ -10,7 +10,7 @@ from scipy.stats import gaussian_kde
 
 alt.data_transformers.disable_max_rows()
 
-# data frames for each dataset
+# Create data frames
 columns = [
     "age",
     "sex",
@@ -40,13 +40,13 @@ df_switzerland = pd.read_csv(
     "data/switzerland.data", na_values="?", names=columns
 ).drop_duplicates()
 
-# add origin column to each DataFrame
+# Add origin column to each DataFrame
 df_cleveland["origin"] = "Cleveland"
 df_hungary["origin"] = "Hungary"
 df_long_beach_va["origin"] = "Long Beach VA"
 df_switzerland["origin"] = "Switzerland"
 
-# add target column
+# Add target column
 df_cleveland["target"] = (df_cleveland["num"] > 0).astype(int)
 df_hungary["target"] = (df_hungary["num"] > 0).astype(int)
 df_switzerland["target"] = (df_switzerland["num"] > 0).astype(int)
@@ -64,7 +64,7 @@ print(df_hungary.describe())
 print(df_long_beach_va.describe())
 print(df_switzerland.describe())
 
-# combine all DataFrames
+# Combine all DataFrames
 df_combined = pd.concat([df_cleveland, df_hungary, df_switzerland, df_long_beach_va])
 
 print(df_combined.info())
@@ -80,10 +80,10 @@ plt.show()
 
 missing_counts_by_origin = df_combined.groupby("origin").apply(lambda g: g.isna().sum())
 
-# total number of missing values for each origin by summing across the columns
+# First, let's get the total number of missing values for each origin by summing across the columns (axis=1)
 total_missing_by_origin = missing_counts_by_origin.sum(axis=1)
 
-# bar plot to visualize these totals
+# Now, let's create a bar plot to visualize these totals
 plt.figure(figsize=(10, 6))
 sns.barplot(
     x=total_missing_by_origin.index, y=total_missing_by_origin.values, palette="viridis"
@@ -327,6 +327,46 @@ def get_clean_data(k=5):
 # raw data for missingness
 def get_raw_data():
     return df_combined.copy()
+
+
+# individual raw datasets for IDA display
+def get_individual_raw_datasets():
+    return {
+        "Cleveland": df_cleveland.copy(),
+        "Hungary": df_hungary.copy(),
+        "Long Beach VA": df_long_beach_va.copy(),
+        "Switzerland": df_switzerland.copy(),
+    }
+
+
+# individual simple imputed datasets
+def get_individual_simple_imputed():
+    return {
+        "Cleveland": df_cleveland_simple.copy(),
+        "Hungary": df_hungary_simple.copy(),
+        "Long Beach VA": df_long_beach_va_simple.copy(),
+        "Switzerland": df_switzerland_simple.copy(),
+    }
+
+
+# individual KNN imputed datasets
+def get_individual_knn_imputed():
+    return {
+        "Cleveland": df_cleveland_knn.copy(),
+        "Hungary": df_hungary_knn.copy(),
+        "Long Beach VA": df_long_beach_va_knn.copy(),
+        "Switzerland": df_switzerland_knn.copy(),
+    }
+
+
+# combined simple imputed
+def get_combined_simple_imputed():
+    return df_combined_simple.copy()
+
+
+# combined KNN imputed (before label merging)
+def get_combined_knn_imputed():
+    return df_combined_knn.copy()
 
 
 # colors for origins
