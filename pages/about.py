@@ -2,6 +2,7 @@ import streamlit as st
 
 # Get filtered data from session state
 dfv = st.session_state.dfv
+df = st.session_state.df  # Unfiltered for total count
 
 st.title("Heart Disease EDA")
 st.markdown("*One Size ≠ Fits All — Multi-Source Analysis*")
@@ -24,43 +25,40 @@ with col2:
             help="Percentage with heart disease",
         )
 
-with col3:
-    if {"origin", "target"}.issubset(dfv.columns):
-        by_origin = dfv.groupby("origin")["target"].mean().mul(100)
-        if len(by_origin):
+# Calculate by_origin once for both metrics
+if {"origin", "target"}.issubset(dfv.columns):
+    by_origin = dfv.groupby("origin", observed=True)["target"].mean().mul(100)
+    if len(by_origin):
+        with col3:
             st.metric(
                 "Lowest Prevalence",
                 f"{by_origin.min():.1f}%",
                 delta=by_origin.idxmin(),
                 delta_color="off",
-                help=f"Minimum prevalence across origins",
+                help="Minimum prevalence across origins",
             )
 
-with col4:
-    if {"origin", "target"}.issubset(dfv.columns):
-        by_origin = dfv.groupby("origin")["target"].mean().mul(100)
-        if len(by_origin):
+        with col4:
             st.metric(
                 "Highest Prevalence",
                 f"{by_origin.max():.1f}%",
                 delta=by_origin.idxmax(),
                 delta_color="off",
-                help=f"Maximum prevalence across origins",
+                help="Maximum prevalence across origins",
             )
 
 st.divider()
 
-# Key findings
-st.subheader("Key Findings")
-st.info(
+st.subheader("The Problem")
+st.error(
     "**Origins differ in distributions, relationships, categorical mix, and prevalence.** "
     "A model trained on a single source (e.g., Cleveland only) may not generalize well to other populations.",
-    icon=":material/lightbulb:",
+    icon=":material/error:",
 )
 
 # About section
 with st.expander("About This Dataset", icon=":material/dataset:", expanded=True):
-    st.markdown("""
+    st.markdown(f"""
     This interactive app explores a **combined heart disease dataset** from four medical institutions:
     
     - 🏥 **Cleveland Clinic Foundation** (Cleveland, USA)
@@ -68,7 +66,7 @@ with st.expander("About This Dataset", icon=":material/dataset:", expanded=True)
     - 🏥 **V.A. Medical Center** (Long Beach, USA)
     - 🏥 **University Hospital** (Zurich, Switzerland)
     
-    The dataset contains **14 clinical features** from **918 patients** and examines how 
+    The dataset contains **14 clinical features** from **{len(df):,} patients** and examines how 
     heart disease patterns vary across different populations and healthcare settings.
     """)
 
@@ -78,9 +76,9 @@ with st.expander("Methodology", icon=":material/science:"):
     ### Data Processing Pipeline
     
     **1. Missing Value Imputation**
-    - KNN imputation (k=5) for numerical features
+    - KNN imputation (k=5) applied to all features
     - Preserves relationships between variables
-    - Compares favorably to simple median/mode imputation
+    - More sophisticated than simple median/mode imputation
     
     **2. Data Normalization**
     - Thalassemia codes normalized to `{3, 6, 7}`
@@ -101,33 +99,33 @@ with st.expander("Methodology", icon=":material/science:"):
 # How to use section
 with st.expander("How to Use This App", icon=":material/explore:"):
     st.markdown("""
-    ### Navigation
+    ### :material/navigation: Navigation
     
     Use the **top navigation bar** to explore different analysis sections:
-    - **Initial Data Analysis**: Raw data overview and missingness patterns
-    - **Data Cleaning**: Imputation strategies and feature engineering
-    - **Exploratory Data Analysis**: Distributions, relationships, and prevalence
+    - **Initial Data Analysis**: Raw data overview and missing data patterns
+    - **Data Cleaning**: Imputation comparison and feature encoding
+    - **Exploratory Data Analysis**: Distributions, relationships, categories, and prevalence
     - **Download**: Export filtered data for your own analysis
     
-    ### Filters (Sidebar)
+    ### :material/filter_list: Filters (Sidebar)
     
     - **Origin Selection**: Choose which medical centers to include
     - **Age Range**: Filter patients by age
     
     All visualizations and statistics update automatically based on your selections.
     
-    ### Tips
+    ### :material/lightbulb_2: Tips
     
-    - Start with **Data Overview** to understand the raw data
-    - Compare **Imputation Comparison** to see how missing values were handled
-    - Explore **Distribution Analysis** to see how variables differ across origins
+    - Start with **Data Overview** to understand the raw data structure
+    - Review **Imputation** to see how missing values were handled
+    - Explore **Distributions** to see how variables differ across origins
     - Check **Prevalence** to understand disease rates by demographic factors
     """)
 
 st.divider()
 
 # Footer with dataset info
-st.caption(
-    "📊 **Data Source**: UCI Machine Learning Repository — Heart Disease Dataset | "
-    "🔗 **Original Sources**: Cleveland, Hungarian, Long Beach VA, Switzerland"
+st.info(
+    "**Data Source:** UCI Machine Learning Repository - Heart Disease Dataset (Cleveland, Hungary, Switzerland, Long Beach VA)",
+    icon=":material/data_info_alert:",
 )

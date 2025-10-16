@@ -14,6 +14,9 @@ age_range = st.session_state.age_range
 
 
 st.title("Distributions")
+st.markdown(
+    "*Exploratory Data Analysis — Comparing Feature Distributions Across Origins*"
+)
 
 var_labels = {
     "trestbps": "Resting Blood Pressure",
@@ -52,8 +55,14 @@ if dist_candidates:
     else:
         st.warning(f"Not enough data variation to display distribution for {dist_var}.")
 
-    st.caption(
-        "Medians and shapes differ across origins → evidence against a one-source view."
+    st.divider()
+
+    st.info(
+        "**Why this matters:** The distribution differences across origins reveal that patient populations varied by institution. "
+        "Different hospitals served different demographics, had different diagnostic equipment, and followed different protocols. "
+        "These variations are not noise—they represent real differences in the populations studied. Any predictive model must "
+        "account for these origin-specific patterns to avoid biased predictions when applied to new patients.",
+        icon=":material/info:",
     )
 else:
     st.info("No numeric variables found for distribution.")

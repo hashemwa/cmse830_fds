@@ -1,4 +1,5 @@
 import streamlit as st
+import pandas as pd
 from analysis import get_individual_raw_datasets
 
 # Get filtered data from session state
@@ -11,10 +12,20 @@ st.markdown(
     "*Initial Data Analysis — Exploring Individual Datasets Before Combination*"
 )
 
+# Data quality note
+st.warning(
+    "**Data Quality Note:** Some features show uniform zero values across entire origins in the original UCI repository data: "
+    "`ca` (number of vessels) = 0 for all Hungary and Long Beach VA patients, and `chol` (cholesterol) = 0 for all Switzerland patients. "
+    "These are likely due to technical limitations, different testing procedures, or data recording practices at those institutions. "
+    "We preserved these values as-is to maintain data authenticity, but note that they affect feature correlations and distributions "
+    "for those specific origins.",
+    icon=":material/warning:",
+)
+
 # Feature descriptions expander
 with st.expander("Feature Descriptions & Encoding", icon=":material/info:"):
     st.markdown("""
-    ### ⚙️ Derived Variables
+    ### :material/settings: Derived Variables
     
     **origin**: Dataset source identifier (added to each individual dataset before combination)
     - `Cleveland` - Cleveland Clinic Foundation
@@ -30,10 +41,10 @@ with st.expander("Feature Descriptions & Encoding", icon=":material/info:"):
     ---
     
     ### Numerical Features
-    - **age**: Age in years (range: 29-77)
-    - **trestbps**: Resting blood pressure on admission (mm Hg)
-    - **chol**: Serum cholesterol (mg/dL)
-    - **thalach**: Maximum heart rate achieved during exercise
+    - **age**: Age in years
+    - **trestbps**: Resting blood pressure (in mm Hg on admission to the hospital)
+    - **chol**: Serum cholesterol in mg/dL
+    - **thalach**: Maximum heart rate achieved
     - **oldpeak**: ST depression induced by exercise relative to rest
     - **ca**: Number of major vessels (0-3) colored by fluoroscopy
     
@@ -49,19 +60,19 @@ with st.expander("Feature Descriptions & Encoding", icon=":material/info:"):
     
     **fbs** (Fasting blood sugar > 120 mg/dL): `1 = true`, `0 = false`
     
-    **restecg** (Resting electrocardiogram results):
+    **restecg** (Resting electrocardiographic results):
     - `0 = normal`
-    - `1 = ST-T wave abnormality (T wave inversions and/or ST elevation or depression of > 0.05 mV)`
-    - `2 = Probable or definite left ventricular hypertrophy (LVH) by Estes' criteria`
+    - `1 = having ST-T wave abnormality (T wave inversions and/or ST elevation or depression of > 0.05 mV)`
+    - `2 = showing probable or definite left ventricular hypertrophy by Estes' criteria`
     
-    **exang** (Exercise-induced angina): `1 = yes`, `0 = no`
+    **exang** (Exercise induced angina): `1 = yes`, `0 = no`
     
-    **slope** (Slope of the peak exercise ST segment):
+    **slope** (The slope of the peak exercise ST segment):
     - `1 = upsloping`
     - `2 = flat`
     - `3 = downsloping`
     
-    **thal** (Thalassemia blood disorder):
+    **thal** (Thalassemia): 
     - `3 = normal`
     - `6 = fixed defect`
     - `7 = reversible defect`
@@ -135,7 +146,23 @@ for idx, (dataset_name, tab) in enumerate(zip(raw_datasets.keys(), tabs)):
 
         with stat_tabs[1]:
             if available_cat:
-                cat_summary = dataset[available_cat].describe(include="all").round(2)
+                # Calculate proper categorical statistics
+                cat_stats = []
+                for col in available_cat:
+                    value_counts = dataset[col].value_counts()
+                    cat_stats.append(
+                        {
+                            "count": dataset[col].notna().sum(),
+                            "unique": dataset[col].nunique(),
+                            "top": value_counts.index[0]
+                            if len(value_counts) > 0
+                            else None,
+                            "freq": value_counts.iloc[0]
+                            if len(value_counts) > 0
+                            else None,
+                        }
+                    )
+                cat_summary = pd.DataFrame(cat_stats, index=available_cat).T
                 st.dataframe(cat_summary, use_container_width=True)
             else:
                 st.info("No categorical features available")
@@ -157,10 +184,16 @@ if "target" in df_raw_filtered.columns:
     col4.metric("Prevalence", f"{prevalence:.1f}%")
 
 # Additional filter info
-if origin_sel or age_range:
+if origin_sel and len(origin_sel) < 4:  # Show only if some origins excluded
+    origins_text = ", ".join(origin_sel)
+    age_text = (
+        f" | Age: {age_range[0]}-{age_range[1]}"
+        if age_range
+        and age_range != (df_raw_filtered["age"].min(), df_raw_filtered["age"].max())
+        else ""
+    )
     st.info(
-        f"**Filters Applied:** Origins: {', '.join(origin_sel)}"
-        + (f" | Age range: {age_range[0]}-{age_range[1]}" if age_range else "")
+        f"**Active Filters:** {origins_text}{age_text}", icon=":material/filter_alt:"
     )
 
 st.markdown("**Summary Statistics (Combined Raw Data)**")
@@ -178,7 +211,6 @@ cat_cols = [
     "thal",
     "num",
     "target",
-    "origin",
 ]
 available_cat = [c for c in cat_cols if c in df_raw_filtered.columns]
 
@@ -195,7 +227,29 @@ with combined_stat_tabs[0]:
 
 with combined_stat_tabs[1]:
     if available_cat:
-        cat_summary = df_raw_filtered[available_cat].describe(include="all").round(2)
+        # Calculate proper categorical statistics
+        cat_stats = []
+        for col in available_cat:
+            value_counts = df_raw_filtered[col].value_counts()
+            cat_stats.append(
+                {
+                    "count": df_raw_filtered[col].notna().sum(),
+                    "unique": df_raw_filtered[col].nunique(),
+                    "top": value_counts.index[0] if len(value_counts) > 0 else None,
+                    "freq": value_counts.iloc[0] if len(value_counts) > 0 else None,
+                }
+            )
+        cat_summary = pd.DataFrame(cat_stats, index=available_cat).T
         st.dataframe(cat_summary, use_container_width=True)
     else:
         st.info("No categorical features available")
+
+st.divider()
+
+st.info(
+    "**Why this matters:** Understanding the raw data structure and statistics from each origin is critical before any analysis. "
+    "The differences in sample sizes, missing data patterns, and feature distributions across institutions reveal that "
+    "we need careful data cleaning strategies. Simple approaches like dropping all missing values would eliminate entire features, "
+    "while ignoring the origin-specific patterns could introduce bias into our models.",
+    icon=":material/info:",
+)

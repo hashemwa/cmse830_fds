@@ -107,6 +107,12 @@ if all(col in df.columns for col in label_cols):
             use_container_width=True,
         )
 
-    st.caption(
-        "✅ **Result:** Categorical variables now have interpretable labels while retaining original numeric codes for modeling."
-    )
+st.divider()
+
+st.info(
+    "**Why this matters:** While machine learning models work with numeric codes, human interpretation requires descriptive labels. "
+    "By maintaining both formats, we enable proper exploratory data analysis and visualization while preserving the original "
+    "numeric encodings for modeling. This dual approach ensures our insights are understandable to medical professionals "
+    "and stakeholders, not just data scientists.",
+    icon=":material/info:",
+)

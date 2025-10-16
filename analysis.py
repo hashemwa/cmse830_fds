@@ -688,3 +688,81 @@ def missingness_heatmap(df, cols):
     )
 
     return heatmap + text
+
+
+def correlation_heatmap(df):
+    """
+    Creates a correlation heatmap for numerical features with heart disease target.
+
+    Args:
+        df: DataFrame with numerical features and target column
+
+    Returns:
+        Altair chart object showing correlation heatmap
+    """
+    # Select numerical columns (exclude origin which is categorical)
+    num_cols = ["age", "trestbps", "chol", "thalach", "oldpeak", "ca"]
+    available_cols = [c for c in num_cols if c in df.columns]
+
+    # Add target if available
+    if "target" in df.columns:
+        available_cols.append("target")
+
+    if len(available_cols) < 2:
+        return None
+
+    # Calculate correlation matrix
+    corr_matrix = df[available_cols].corr()
+
+    # Reshape for Altair (long format)
+    corr_data = []
+    for i, row_var in enumerate(corr_matrix.index):
+        for j, col_var in enumerate(corr_matrix.columns):
+            corr_data.append(
+                {
+                    "Variable 1": row_var,
+                    "Variable 2": col_var,
+                    "Correlation": corr_matrix.iloc[i, j],
+                }
+            )
+
+    corr_df = pd.DataFrame(corr_data)
+
+    # Create heatmap
+    heatmap = (
+        alt.Chart(corr_df)
+        .mark_rect()
+        .encode(
+            x=alt.X("Variable 1:N", title=None, axis=alt.Axis(labelAngle=-45)),
+            y=alt.Y("Variable 2:N", title=None),
+            color=alt.Color(
+                "Correlation:Q",
+                scale=alt.Scale(
+                    domain=[-1, 0, 1], range=["#d73027", "#f7f7f7", "#1a9850"]
+                ),
+                legend=alt.Legend(title="Correlation"),
+            ),
+            tooltip=[
+                alt.Tooltip("Variable 1:N", title="Variable 1"),
+                alt.Tooltip("Variable 2:N", title="Variable 2"),
+                alt.Tooltip("Correlation:Q", title="Correlation", format=".3f"),
+            ],
+        )
+        .properties(height=400)
+    )
+
+    # Add text labels for correlation values
+    text = (
+        alt.Chart(corr_df)
+        .mark_text(fontSize=10)
+        .encode(
+            x=alt.X("Variable 1:N"),
+            y=alt.Y("Variable 2:N"),
+            text=alt.Text("Correlation:Q", format=".2f"),
+            color=alt.condition(
+                alt.datum.Correlation > 0.5, alt.value("white"), alt.value("black")
+            ),
+        )
+    )
+
+    return heatmap + text

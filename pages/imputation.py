@@ -25,9 +25,10 @@ st.title("Imputation")
 st.markdown("*Comparing Simple vs KNN Imputation Methods*")
 
 # Methodology explanation
-st.info(
+st.warning(
     "**Methodology:** Each dataset was imputed **independently** to avoid data leakage across origins. "
-    "This preserves the unique characteristics of each medical institution's data."
+    "This preserves the unique characteristics of each medical institution's data.",
+    icon=":material/science:",
 )
 
 with st.expander("Why KNN Imputation?", icon=":material/info:"):
@@ -35,12 +36,12 @@ with st.expander("Why KNN Imputation?", icon=":material/info:"):
     **Simple Imputation** (mean/mode):
     - Replaces missing values with the overall mean (numerical) or mode (categorical)
     - Fast and straightforward
-    - ❌ Reduces variance and ignores relationships between features
+    - :material/cancel: Reduces variance and ignores relationships between features
     
     **KNN Imputation** (k=5):
     - Uses the 5 most similar patients to estimate missing values
     - Preserves local structure and feature relationships
-    - ✅ Better maintains the original data distribution
+    - :material/check_circle: Better maintains the original data distribution
     """)
 
 # Get imputed datasets
@@ -74,7 +75,6 @@ for idx, (dataset_name, tab) in enumerate(zip(raw_datasets.keys(), tabs)):
             st.metric(
                 "Missing Values",
                 missing_simple,
-                delta=f"{missing_simple - missing_count}",
             )
 
         with col3:
@@ -83,7 +83,6 @@ for idx, (dataset_name, tab) in enumerate(zip(raw_datasets.keys(), tabs)):
             st.metric(
                 "Missing Values",
                 missing_knn,
-                delta=f"{missing_knn - missing_count}",
             )
 
         # Distribution comparison example
@@ -259,24 +258,49 @@ with feature_tabs[1]:
     with col1:
         st.markdown("**Original (Raw Data)**")
         if available_cat:
-            st.dataframe(
-                combined_raw[available_cat].describe(include="all").round(2),
-                use_container_width=True,
-            )
+            # Calculate proper categorical statistics
+            cat_stats = []
+            for col in available_cat:
+                value_counts = combined_raw[col].value_counts()
+                cat_stats.append(
+                    {
+                        "count": combined_raw[col].notna().sum(),
+                        "unique": combined_raw[col].nunique(),
+                        "top": value_counts.index[0] if len(value_counts) > 0 else None,
+                        "freq": value_counts.iloc[0] if len(value_counts) > 0 else None,
+                    }
+                )
+            cat_summary = pd.DataFrame(cat_stats, index=available_cat).T
+            st.dataframe(cat_summary, use_container_width=True)
         else:
             st.info("No categorical features available")
 
     with col2:
         st.markdown("**After KNN Imputation**")
         if available_cat:
-            st.dataframe(
-                combined_knn[available_cat].describe(include="all").round(2),
-                use_container_width=True,
-            )
+            # Calculate proper categorical statistics
+            cat_stats = []
+            for col in available_cat:
+                value_counts = combined_knn[col].value_counts()
+                cat_stats.append(
+                    {
+                        "count": combined_knn[col].notna().sum(),
+                        "unique": combined_knn[col].nunique(),
+                        "top": value_counts.index[0] if len(value_counts) > 0 else None,
+                        "freq": value_counts.iloc[0] if len(value_counts) > 0 else None,
+                    }
+                )
+            cat_summary = pd.DataFrame(cat_stats, index=available_cat).T
+            st.dataframe(cat_summary, use_container_width=True)
         else:
             st.info("No categorical features available")
 
-st.caption(
-    "✅ **Result:** KNN imputation successfully filled all missing values while preserving "
-    "the statistical properties and distributions of the original data."
+st.divider()
+
+st.info(
+    "**Why this matters:** The choice of imputation method directly affects the quality of downstream analysis. "
+    "KNN imputation preserves the relationships between features and maintains realistic distributions, "
+    "which is critical for heart disease prediction. Simple mean/mode imputation would artificially reduce "
+    "variance and create unrealistic values, potentially misleading any models or statistical tests built on this data.",
+    icon=":material/info:",
 )
