@@ -96,19 +96,41 @@ if "origin" in df.columns:
 
 # Sidebar filters
 with st.sidebar:
-    st.header("Filters")
+    st.markdown("### :material/tune: **Filters**")
+    st.markdown("*Customize your view of the data*")
+    st.divider()
+
+    # Origin filter section
+    st.markdown("#### :material/location_on: Data Origin")
+    st.caption("Select institutions to include")
 
     origin_opts = (
         sorted(df["origin"].dropna().unique()) if "origin" in df.columns else []
     )
     origin_sel = []
-    for origin in origin_opts:
-        if st.checkbox(origin, value=True, key=f"origin_{origin}"):
-            origin_sel.append(origin)
+
+    # Use a more compact layout with columns for checkboxes
+    if origin_opts:
+        for origin in origin_opts:
+            if st.checkbox(origin, value=True, key=f"origin_{origin}"):
+                origin_sel.append(origin)
+
+    st.divider()
+
+    # Age filter section
+    st.markdown("#### :material/calendar_today: Age Range")
+    st.caption("Filter patients by age")
 
     if "age" in df.columns and df["age"].notna().any():
         a_min, a_max = int(np.nanmin(df["age"])), int(np.nanmax(df["age"]))
-        age_range = st.slider("Age range", a_min, a_max, (a_min, a_max))
+        age_range = st.slider(
+            "", a_min, a_max, (a_min, a_max), label_visibility="collapsed"
+        )
+
+        # Show selected range
+        col1, col2 = st.columns(2)
+        col1.metric("Min Age", age_range[0], delta=None)
+        col2.metric("Max Age", age_range[1], delta=None)
     else:
         age_range = None
 

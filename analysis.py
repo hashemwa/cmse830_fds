@@ -738,7 +738,8 @@ def correlation_heatmap(df):
             color=alt.Color(
                 "Correlation:Q",
                 scale=alt.Scale(
-                    domain=[-1, 0, 1], range=["#d73027", "#f7f7f7", "#1a9850"]
+                    domain=[-1, 0, 1],
+                    range=["#d73027", "#f7f7f7", "#1a9850"],
                 ),
                 legend=alt.Legend(title="Correlation"),
             ),

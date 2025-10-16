@@ -106,9 +106,9 @@ with st.expander("How to Use This App", icon=":material/explore:"):
     - **Data Cleaning**: Imputation comparison and feature encoding
     - **Exploratory Data Analysis**: Distributions, relationships, categories, and prevalence
     - **Download**: Export filtered data for your own analysis
-    
-    ### :material/filter_list: Filters (Sidebar)
-    
+
+    ### :material/tune: Filters (Sidebar)
+
     - **Origin Selection**: Choose which medical centers to include
     - **Age Range**: Filter patients by age
     
