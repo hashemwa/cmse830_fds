@@ -733,7 +733,7 @@ def correlation_heatmap(df):
         alt.Chart(corr_df)
         .mark_rect()
         .encode(
-            x=alt.X("Variable 1:N", title=None, axis=alt.Axis(labelAngle=-45)),
+            x=alt.X("Variable 1:N", title=None, axis=alt.Axis(labelAngle=0)),
             y=alt.Y("Variable 2:N", title=None),
             color=alt.Color(
                 "Correlation:Q",

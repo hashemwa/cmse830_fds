@@ -49,14 +49,14 @@ if df_raw_filtered.isnull().values.any():
         )
 
         st.caption(
-            "💡 **Key observation:** Some features like `ca` and `thal` have substantial missing data."
+            ":material/lightbulb: **Key observation:** Some features like `ca` and `thal` have substantial missing data."
         )
 
     st.divider()
 
     # Missingness heatmap
     st.subheader("Missingness Patterns by Origin")
-    st.markdown(
+    st.caption(
         "This heatmap shows the percentage of missing values for each feature across different data sources."
     )
 
@@ -85,10 +85,14 @@ if df_raw_filtered.isnull().values.any():
     st.altair_chart(chart, use_container_width=True)
 
     st.info(
-        "**Why this matters:** Missingness patterns vary significantly by origin. "
-        "Different hospitals had different data collection practices, equipment, and protocols. "
-        "This means imputation strategies must account for these differences to avoid biased results.",
+        "**Why this matters:** The missing data patterns prove that hospitals collected data in fundamentally different ways. "
+        "Some hospitals are missing entire features (like `ca` and `thal`) while others have complete data. "
+        "This isn't random. It tells us that hospitals used different equipment, ran different tests, and followed different protocols. "
+        "If we ignore these differences and just combine everything together, we're pretending four different hospitals are the same. "
+        "That's why a 'one size fits all' model trained on mixed data will fail when used at any single hospital.",
         icon=":material/info:",
     )
 else:
-    st.success("✅ No missing values in the filtered raw data!")
+    st.success(
+        "No missing values in the filtered raw data!", icon=":material/check_circle:"
+    )

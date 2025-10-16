@@ -50,7 +50,7 @@ simple_datasets = get_individual_simple_imputed()
 knn_datasets = get_individual_knn_imputed()
 
 st.subheader("Individual Dataset Comparison")
-st.markdown("Compare imputation methods for each dataset source.")
+st.caption("Compare imputation methods for each dataset source.")
 
 # Create tabs for each dataset
 tabs = st.tabs(["Cleveland", "Hungary", "Long Beach VA", "Switzerland"])
@@ -199,7 +199,7 @@ st.divider()
 
 # Combined dataset comparison
 st.subheader("Combined Dataset: Before vs After KNN Imputation")
-st.markdown(
+st.caption(
     "Compare the combined raw data with the final cleaned dataset after KNN imputation."
 )
 
@@ -298,9 +298,9 @@ with feature_tabs[1]:
 st.divider()
 
 st.info(
-    "**Why this matters:** The choice of imputation method directly affects the quality of downstream analysis. "
-    "KNN imputation preserves the relationships between features and maintains realistic distributions, "
-    "which is critical for heart disease prediction. Simple mean/mode imputation would artificially reduce "
-    "variance and create unrealistic values, potentially misleading any models or statistical tests built on this data.",
+    "**Why this matters:** How we fill in missing values directly affects everything we learn from the data. "
+    "KNN imputation preserves the relationships between features and creates realistic values based on similar patients. "
+    "Simple mean/mode imputation would make all patients look more similar than they really are, "
+    "which could mislead any predictions or conclusions we make from this data.",
     icon=":material/info:",
 )

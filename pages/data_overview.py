@@ -8,16 +8,14 @@ origin_sel = st.session_state.origin_sel
 age_range = st.session_state.age_range
 
 st.title("Data Overview")
-st.markdown(
-    "*Initial Data Analysis — Exploring Individual Datasets Before Combination*"
-)
+st.markdown("*Exploring Individual Datasets Before Combination*")
 
 # Data quality note
 st.warning(
     "**Data Quality Note:** Some features show uniform zero values across entire origins in the original UCI repository data: "
     "`ca` (number of vessels) = 0 for all Hungary and Long Beach VA patients, and `chol` (cholesterol) = 0 for all Switzerland patients. "
     "These are likely due to technical limitations, different testing procedures, or data recording practices at those institutions. "
-    "We preserved these values as-is to maintain data authenticity, but note that they affect feature correlations and distributions "
+    "We preserved these values to maintain data authenticity, but note that they affect feature correlations and distributions "
     "for those specific origins.",
     icon=":material/warning:",
 )
@@ -89,7 +87,7 @@ with st.expander("Feature Descriptions & Encoding", icon=":material/info:"):
 raw_datasets = get_individual_raw_datasets()
 
 st.subheader("Individual Dataset Analysis")
-st.markdown(
+st.caption(
     "Each dataset was collected from different medical institutions with varying data collection practices."
 )
 
@@ -171,7 +169,7 @@ st.divider()
 
 # Combined dataset analysis
 st.subheader("Combined Dataset Summary")
-st.markdown("After combining all four datasets, here are the overall statistics:")
+st.caption("After combining all four datasets, here are the overall statistics:")
 
 # Combined dataset metrics (using raw filtered data)
 col1, col2, col3, col4 = st.columns(4)
@@ -247,9 +245,9 @@ with combined_stat_tabs[1]:
 st.divider()
 
 st.info(
-    "**Why this matters:** Understanding the raw data structure and statistics from each origin is critical before any analysis. "
-    "The differences in sample sizes, missing data patterns, and feature distributions across institutions reveal that "
-    "we need careful data cleaning strategies. Simple approaches like dropping all missing values would eliminate entire features, "
-    "while ignoring the origin-specific patterns could introduce bias into our models.",
+    "**Why this matters:** We need to understand the raw data from each hospital before doing any analysis. "
+    "The different sample sizes, missing values, and feature patterns show that each institution collected data differently. "
+    "If we simply deleted all rows with missing values, we'd lose entire features. "
+    "And if we ignored these differences between hospitals, our analysis could give us wrong answers.",
     icon=":material/info:",
 )

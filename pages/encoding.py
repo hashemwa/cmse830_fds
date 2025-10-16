@@ -10,13 +10,13 @@ age_range = st.session_state.age_range
 
 
 st.title("Encoding")
-st.markdown(
-    "*Data Cleaning — Creating Human-Readable Labels for Categorical Variables*"
-)
+st.markdown("*Creating Labels for Categorical Variables*")
 
 # Encoding mappings
 st.subheader("Categorical Variable Mappings")
-st.write("Numeric codes were mapped to descriptive labels to improve interpretability:")
+st.caption(
+    "Numeric codes were mapped to descriptive labels to improve interpretability:"
+)
 
 tab1, tab2, tab3, tab4, tab5 = st.tabs(
     ["Chest Pain", "Resting ECG", "ST Slope", "Thalassemia", "Diagnosis"]
@@ -110,9 +110,9 @@ if all(col in df.columns for col in label_cols):
 st.divider()
 
 st.info(
-    "**Why this matters:** While machine learning models work with numeric codes, human interpretation requires descriptive labels. "
-    "By maintaining both formats, we enable proper exploratory data analysis and visualization while preserving the original "
-    "numeric encodings for modeling. This dual approach ensures our insights are understandable to medical professionals "
-    "and stakeholders, not just data scientists.",
+    "**Why this matters:** Machine learning models need numbers, but humans need words to understand the data. "
+    "By keeping both the numeric codes (for computers) and text labels (for people), "
+    "we can analyze the data properly while still being able to explain our findings "
+    "to doctors and patients who are not familiar with data science.",
     icon=":material/info:",
 )

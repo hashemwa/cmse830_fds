@@ -14,9 +14,7 @@ age_range = st.session_state.age_range
 
 
 st.title("Distributions")
-st.markdown(
-    "*Exploratory Data Analysis — Comparing Feature Distributions Across Origins*"
-)
+st.markdown("*Comparing Feature Distributions Across Origins*")
 
 var_labels = {
     "trestbps": "Resting Blood Pressure",
@@ -58,10 +56,10 @@ if dist_candidates:
     st.divider()
 
     st.info(
-        "**Why this matters:** The distribution differences across origins reveal that patient populations varied by institution. "
-        "Different hospitals served different demographics, had different diagnostic equipment, and followed different protocols. "
-        "These variations are not noise—they represent real differences in the populations studied. Any predictive model must "
-        "account for these origin-specific patterns to avoid biased predictions when applied to new patients.",
+        "**Why this matters:** Each hospital's patient population looks different in the data. "
+        "They served different types of patients, used different equipment, and followed different procedures. "
+        "These differences are real and not just noise. Any prediction model needs to account for which hospital "
+        "the data came from, or it will make bad predictions when used on patients from a different hospital.",
         icon=":material/info:",
     )
 else:

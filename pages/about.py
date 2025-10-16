@@ -4,7 +4,9 @@ import streamlit as st
 dfv = st.session_state.dfv
 df = st.session_state.df  # Unfiltered for total count
 
-st.title("Heart Disease EDA")
+st.title(
+    "Heart Disease EDA",
+)
 st.markdown("*One Size ≠ Fits All — Multi-Source Analysis*")
 
 # Key metrics at the top
@@ -49,10 +51,10 @@ if {"origin", "target"}.issubset(dfv.columns):
 
 st.divider()
 
-st.subheader("The Problem")
+st.subheader("Main Problem")
 st.error(
     "**Origins differ in distributions, relationships, categorical mix, and prevalence.** "
-    "A model trained on a single source (e.g., Cleveland only) may not generalize well to other populations.",
+    "A model trained on a single source (e.g., Cleveland only) may not generalize well to other populations/areas.",
     icon=":material/error:",
 )
 
@@ -61,12 +63,12 @@ with st.expander("About This Dataset", icon=":material/dataset:", expanded=True)
     st.markdown(f"""
     This interactive app explores a **combined heart disease dataset** from four medical institutions:
     
-    - 🏥 **Cleveland Clinic Foundation** (Cleveland, USA)
-    - 🏥 **Hungarian Institute of Cardiology** (Budapest, Hungary)  
-    - 🏥 **V.A. Medical Center** (Long Beach, USA)
-    - 🏥 **University Hospital** (Zurich, Switzerland)
-    
-    The dataset contains **14 clinical features** from **{len(df):,} patients** and examines how 
+    - :material/health_cross: **Cleveland Clinic Foundation** (Cleveland, USA)
+    - :material/health_cross: **Hungarian Institute of Cardiology** (Budapest, Hungary)
+    - :material/health_cross: **V.A. Medical Center** (Long Beach, USA)
+    - :material/health_cross: **University Hospital** (Zurich, Switzerland)
+
+    The dataset contains **14 clinical features** from **{len(df):,} patients** and examines how
     heart disease patterns vary across different populations and healthcare settings.
     """)
 

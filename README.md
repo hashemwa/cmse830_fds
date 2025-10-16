@@ -24,7 +24,7 @@ This dataset reveals real-world challenges in medical AI: distribution shifts, m
 
 ### Key Insights from Initial Data Analysis
 
-1.  **Massive Prevalence Differences (54% Cleveland → 20% Switzerland)**
+1.  **Significant Prevalence Differences (45.9% Cleveland → 93.5% Switzerland)**
     -   Heart disease rates vary dramatically by origin
     -   Cleveland likely serves higher-risk or specialty populations
     -   Models trained on one origin will systematically over/under-estimate risk elsewhere

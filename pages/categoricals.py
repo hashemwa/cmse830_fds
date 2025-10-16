@@ -5,9 +5,7 @@ from analysis import stacked_categorical
 dfv = st.session_state.dfv
 
 st.title("Categories")
-st.markdown(
-    "*Exploratory Data Analysis — Analyzing Categorical Feature Distributions by Origin*"
-)
+st.markdown("*Analyzing Categorical Features by Origin*")
 
 cat_candidates = [
     c
@@ -23,9 +21,9 @@ if cat_candidates:
     )
 
     st.subheader("Categorical Variable Analysis")
-    st.markdown(
+    st.caption(
         "Examine how categorical features like chest pain type, ECG results, and thalassemia status "
-        "vary across different medical institutions. These distributions reveal differences in patient populations "
+        "vary across different medical institutions. These bar plots reveal differences in patient populations "
         "and diagnostic patterns."
     )
 
@@ -36,10 +34,11 @@ if cat_candidates:
         st.divider()
 
         st.info(
-            "**Why this matters:** Categorical feature distributions vary significantly across origins, reflecting differences in patient populations, "
-            "referral patterns, and diagnostic practices. For example, one hospital may see more severe cases (referral bias), while another serves "
-            "a general population. These distributional shifts affect how we should interpret results and build predictive models. "
-            "Ignoring these origin-specific patterns could lead to models that work well for one population but fail for others.",
+            "**Why this matters:** The types of patients each hospital sees are quite different. "
+            "For example, one hospital might be a specialty clinic that mostly sees severe cases (referral bias), "
+            "while another treats general walk-in patients. These differences affect what the data tells us. "
+            "A model trained on data from a specialty clinic will expect sicker patients and might give false positives "
+            "when used in a general practice setting.",
             icon=":material/info:",
         )
 else:
