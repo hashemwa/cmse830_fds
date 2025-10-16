@@ -101,59 +101,35 @@ for idx, (dataset_name, tab) in enumerate(zip(raw_datasets.keys(), tabs)):
             if len(original_vals) > 1 and original_vals.std() > 0:
                 x_min = min(original_vals.min(), simple_vals.min(), knn_vals.min())
                 x_max = max(original_vals.max(), simple_vals.max(), knn_vals.max())
-                x_smooth = np.linspace(x_min, x_max, 200)
+                x_smooth = np.linspace(x_min, x_max, 100)  # Reduced from 200 to 100
 
-                chart_data = []
-
-                # Original KDE
+                # Compute KDE values vectorized (much faster)
                 try:
                     kde_orig = gaussian_kde(original_vals, bw_method="scott")
-                    for x_val in x_smooth:
-                        chart_data.append(
-                            {
-                                "trestbps (mmHg)": x_val,
-                                "Density": kde_orig(x_val)[0],
-                                "Method": "Original",
-                            }
-                        )
-                except Exception:
-                    pass
-
-                # Simple KDE
-                try:
                     kde_simple = gaussian_kde(simple_vals, bw_method="scott")
-                    for x_val in x_smooth:
-                        chart_data.append(
-                            {
-                                "trestbps (mmHg)": x_val,
-                                "Density": kde_simple(x_val)[0],
-                                "Method": "Simple Imputation",
-                            }
-                        )
-                except Exception:
-                    pass
-
-                # KNN KDE
-                try:
                     kde_knn = gaussian_kde(knn_vals, bw_method="scott")
-                    for x_val in x_smooth:
-                        chart_data.append(
-                            {
-                                "trestbps (mmHg)": x_val,
-                                "Density": kde_knn(x_val)[0],
-                                "Method": "KNN Imputation",
-                            }
-                        )
-                except Exception:
-                    pass
 
-                if chart_data:
-                    chart_df = pd.DataFrame(chart_data)
+                    # Evaluate all at once
+                    y_orig = kde_orig(x_smooth)
+                    y_simple = kde_simple(x_smooth)
+                    y_knn = kde_knn(x_smooth)
+
+                    # Create DataFrame efficiently
+                    chart_df = pd.DataFrame(
+                        {
+                            "trestbps (mmHg)": np.tile(x_smooth, 3),
+                            "Density": np.concatenate([y_orig, y_simple, y_knn]),
+                            "Method": np.repeat(
+                                ["Original", "Simple Imputation", "KNN Imputation"],
+                                len(x_smooth),
+                            ),
+                        }
+                    )
 
                     # Use line chart for better visibility of overlapping distributions
                     chart = (
                         alt.Chart(chart_df)
-                        .mark_line(size=3, strokeDash=[0, 0])
+                        .mark_line(size=3)
                         .encode(
                             x=alt.X(
                                 "trestbps (mmHg):Q",
@@ -193,6 +169,10 @@ for idx, (dataset_name, tab) in enumerate(zip(raw_datasets.keys(), tabs)):
                     st.altair_chart(chart, use_container_width=True)
                     st.caption(
                         "KNN imputation preserves the original distribution shape better than simple mean imputation."
+                    )
+                except Exception:
+                    st.warning(
+                        "Unable to generate distribution comparison for this dataset."
                     )
 
 st.divider()

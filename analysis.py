@@ -593,7 +593,7 @@ def stacked_categorical(df, cat_col):
             else alt.Undefined,
             tooltip=[
                 alt.Tooltip("origin:N", title="Origin"),
-                alt.Tooltip(f"{cat_col}:N", title=cat_col.replace("_", " ")),
+                alt.Tooltip(f"{cat_col}:N", title="Label"),
                 alt.Tooltip("n:Q", title="Count"),
                 alt.Tooltip("pct:Q", title="Percent", format=".1f"),
             ],
