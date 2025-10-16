@@ -1,0 +1,8 @@
+streamlit>=1.46
+pandas
+numpy
+altair
+seaborn
+matplotlib
+scikit-learn
+scipy
