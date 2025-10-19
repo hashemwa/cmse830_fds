@@ -27,19 +27,6 @@ st.warning(
     icon=":material/science:",
 )
 
-with st.expander("Why KNN Imputation?", icon=":material/info:"):
-    st.markdown("""
-    **Simple Imputation** (mean/mode):
-    - Replaces missing values with the overall mean (numerical) or mode (categorical)
-    - Fast and straightforward
-    - :material/cancel: Reduces variance and ignores relationships between features
-    
-    **KNN Imputation** (k=5):
-    - Uses the 5 most similar patients to estimate missing values
-    - Preserves local structure and feature relationships
-    - :material/check_circle: Better maintains the original data distribution
-    """)
-
 raw_datasets = get_individual_raw_datasets()
 simple_datasets = get_individual_simple_imputed()
 knn_datasets = get_individual_knn_imputed()
@@ -187,6 +174,19 @@ cat_cols = [
     "target",
 ]
 available_cat = [c for c in cat_cols if c in combined_knn.columns]
+
+with st.expander("Why KNN Imputation?", icon=":material/info:"):
+    st.markdown("""
+    **Simple Imputation** (mean/mode):
+    - Replaces missing values with the overall mean (numerical) or mode (categorical)
+    - Fast and straightforward
+    - :material/cancel: Reduces variance and ignores relationships between features
+    
+    **KNN Imputation** (k=5):
+    - Uses the 5 most similar patients to estimate missing values
+    - Preserves local structure and feature relationships
+    - :material/check_circle: Better maintains the original data distribution
+    """)
 
 st.markdown("**Summary Statistics Comparison**")
 

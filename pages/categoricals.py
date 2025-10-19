@@ -40,5 +40,10 @@ if cat_candidates:
             "when used in a general practice setting.",
             icon=":material/info:",
         )
+        st.warning(
+            "**Important note:** Features like `slope` and `thal` had extremely high missing rates (50-90% in some hospitals). "
+            "The patterns you see for these variables are based on very few patients and may not represent the full population. ",
+            icon=":material/warning:",
+        )
 else:
     st.info("No label columns found.")

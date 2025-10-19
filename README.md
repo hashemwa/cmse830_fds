@@ -225,7 +225,7 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-## The app will open in your default browser at `http://localhost:8501`
+The app will open in your default browser at `http://localhost:8501`
 
 ## Data Source
 
