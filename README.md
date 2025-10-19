@@ -227,6 +227,8 @@ streamlit run app.py
 
 The app will open in your default browser at `http://localhost:8501`
 
+------------------------------------------------------------------------
+
 ## Data Source
 
 **UCI Machine Learning Repository - Heart Disease Database** - Cleveland Clinic Foundation - Hungarian Institute of Cardiology, Budapest\
