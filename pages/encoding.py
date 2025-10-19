@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 
-# Get data from session state
 dfv = st.session_state.dfv
 df_raw_filtered = st.session_state.df_raw_filtered
 df = st.session_state.df
@@ -12,7 +11,6 @@ age_range = st.session_state.age_range
 st.title("Encoding")
 st.markdown("*Creating Labels for Categorical Variables*")
 
-# Encoding mappings
 st.subheader("Categorical Variable Mappings")
 st.caption(
     "Numeric codes were mapped to descriptive labels to improve interpretability:"
@@ -82,7 +80,6 @@ with tab5:
     )
     st.dataframe(num_mapping, use_container_width=True, hide_index=True)
 
-# Before/After comparison
 st.subheader("Before & After Sample")
 
 label_cols = ["cp_label", "restecg_label", "slope_label", "thal_label", "num_label"]

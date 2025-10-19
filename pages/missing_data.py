@@ -2,13 +2,11 @@ import streamlit as st
 import pandas as pd
 from analysis import missingness_heatmap
 
-# Get filtered data from session state
 df_raw_filtered = st.session_state.df_raw_filtered
 
 st.title("Missing Data")
 st.markdown("*Understanding missing values in the **raw data** before imputation*")
 
-# Overall missingness metrics
 total_cells = df_raw_filtered.size
 missing_cells = df_raw_filtered.isnull().sum().sum()
 missing_pct = 100 * missing_cells / total_cells if total_cells > 0 else 0
@@ -25,7 +23,6 @@ col4.metric(
 st.divider()
 
 if df_raw_filtered.isnull().values.any():
-    # Feature-level missingness breakdown
     st.subheader("Missing Data by Feature")
 
     missing_summary = pd.DataFrame(
@@ -35,7 +32,6 @@ if df_raw_filtered.isnull().values.any():
         }
     ).sort_values("Missing Count", ascending=False)
 
-    # Only show features with missing data
     missing_summary = missing_summary[missing_summary["Missing Count"] > 0]
 
     if not missing_summary.empty:
@@ -54,7 +50,6 @@ if df_raw_filtered.isnull().values.any():
 
     st.divider()
 
-    # Missingness heatmap
     st.subheader("Missingness Patterns by Origin")
     st.caption(
         "This heatmap shows the percentage of missing values for each feature across different data sources."

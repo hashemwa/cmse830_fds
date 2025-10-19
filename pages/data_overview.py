@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 from analysis import get_individual_raw_datasets
 
-# Get filtered data from session state
 df_raw_filtered = st.session_state.df_raw_filtered
 origin_sel = st.session_state.origin_sel
 age_range = st.session_state.age_range
@@ -10,7 +9,6 @@ age_range = st.session_state.age_range
 st.title("Data Overview")
 st.markdown("*Exploring Individual Datasets Before Combination*")
 
-# Data quality note
 st.warning(
     "**Data Quality Note:** Some features show uniform zero values across entire origins in the original UCI repository data: "
     "`ca` (number of vessels) = 0 for all Hungary and Long Beach VA patients, and `chol` (cholesterol) = 0 for all Switzerland patients. "
@@ -20,7 +18,6 @@ st.warning(
     icon=":material/warning:",
 )
 
-# Feature descriptions expander
 with st.expander("Feature Descriptions & Encoding", icon=":material/info:"):
     st.markdown("""
     ### :material/settings: Derived Variables
@@ -83,7 +80,6 @@ with st.expander("Feature Descriptions & Encoding", icon=":material/info:"):
     - `4 = critical heart disease`
     """)
 
-# Get individual raw datasets
 raw_datasets = get_individual_raw_datasets()
 
 st.subheader("Individual Dataset Analysis")
@@ -91,14 +87,12 @@ st.caption(
     "Each dataset was collected from different medical institutions with varying data collection practices."
 )
 
-# Create tabs for each dataset
 tabs = st.tabs(["Cleveland", "Hungary", "Long Beach VA", "Switzerland"])
 
 for idx, (dataset_name, tab) in enumerate(zip(raw_datasets.keys(), tabs)):
     with tab:
         dataset = raw_datasets[dataset_name]
 
-        # Dataset metrics
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("Rows", len(dataset))
         col2.metric("Columns", len(dataset.columns))
@@ -108,11 +102,9 @@ for idx, (dataset_name, tab) in enumerate(zip(raw_datasets.keys(), tabs)):
             prevalence = 100 * dataset["target"].mean()
             col4.metric("Prevalence", f"{prevalence:.1f}%")
 
-        # Data preview
         st.markdown("**Data Preview**")
         st.dataframe(dataset.head(10), use_container_width=True)
 
-        # Summary statistics with tabs
         st.markdown("**Summary Statistics**")
 
         num_cols = ["age", "trestbps", "chol", "thalach", "oldpeak", "ca"]
@@ -144,7 +136,6 @@ for idx, (dataset_name, tab) in enumerate(zip(raw_datasets.keys(), tabs)):
 
         with stat_tabs[1]:
             if available_cat:
-                # Calculate proper categorical statistics
                 cat_stats = []
                 for col in available_cat:
                     value_counts = dataset[col].value_counts()
@@ -167,11 +158,9 @@ for idx, (dataset_name, tab) in enumerate(zip(raw_datasets.keys(), tabs)):
 
 st.divider()
 
-# Combined dataset analysis
 st.subheader("Combined Dataset Summary")
 st.caption("After combining all four datasets, here are the overall statistics:")
 
-# Combined dataset metrics (using raw filtered data)
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("Total Rows", f"{len(df_raw_filtered):,}")
 col2.metric("Columns", len(df_raw_filtered.columns))
@@ -181,8 +170,7 @@ if "target" in df_raw_filtered.columns:
     prevalence = 100 * df_raw_filtered["target"].mean()
     col4.metric("Prevalence", f"{prevalence:.1f}%")
 
-# Additional filter info
-if origin_sel and len(origin_sel) < 4:  # Show only if some origins excluded
+if origin_sel and len(origin_sel) < 4:
     origins_text = ", ".join(origin_sel)
     age_text = (
         f" | Age: {age_range[0]}-{age_range[1]}"
@@ -225,7 +213,6 @@ with combined_stat_tabs[0]:
 
 with combined_stat_tabs[1]:
     if available_cat:
-        # Calculate proper categorical statistics
         cat_stats = []
         for col in available_cat:
             value_counts = df_raw_filtered[col].value_counts()

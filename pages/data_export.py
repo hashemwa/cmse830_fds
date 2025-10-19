@@ -1,7 +1,5 @@
 import streamlit as st
 
-
-# Get data from session state
 dfv = st.session_state.dfv
 df_raw_filtered = st.session_state.df_raw_filtered
 df = st.session_state.df
@@ -53,14 +51,13 @@ st.dataframe(
 
 st.subheader("Export Summary")
 
-# Metrics and download button in same row
 col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
 col1.metric("Rows", len(dfv))
 col2.metric("Columns", len(dfv.columns))
 col3.metric("Size", f"{dfv.memory_usage(deep=True).sum() / 1024:.1f} KB")
 
 with col4:
-    st.markdown("<br>", unsafe_allow_html=True)  # Add spacing to align with metrics
+    st.markdown("<br>", unsafe_allow_html=True)
     st.download_button(
         "Download CSV",
         dfv.to_csv(index=False),

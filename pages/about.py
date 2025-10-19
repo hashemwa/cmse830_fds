@@ -1,15 +1,13 @@
 import streamlit as st
 
-# Get filtered data from session state
 dfv = st.session_state.dfv
-df = st.session_state.df  # Unfiltered for total count
+df = st.session_state.df
 
 st.title(
     "Heart Disease EDA",
 )
 st.markdown("*One Size ≠ Fits All — Multi-Source Analysis*")
 
-# Key metrics at the top
 st.subheader("Dataset Summary")
 col1, col2, col3, col4 = st.columns(4)
 
@@ -27,7 +25,6 @@ with col2:
             help="Percentage with heart disease",
         )
 
-# Calculate by_origin once for both metrics
 if {"origin", "target"}.issubset(dfv.columns):
     by_origin = dfv.groupby("origin", observed=True)["target"].mean().mul(100)
     if len(by_origin):
@@ -58,7 +55,6 @@ st.error(
     icon=":material/error:",
 )
 
-# About section
 with st.expander("About This Dataset", icon=":material/dataset:", expanded=True):
     st.markdown(f"""
     This interactive app explores a **combined heart disease dataset** from four medical institutions:
@@ -72,7 +68,6 @@ with st.expander("About This Dataset", icon=":material/dataset:", expanded=True)
     heart disease patterns vary across different populations and healthcare settings.
     """)
 
-# Methodology section
 with st.expander("Methodology", icon=":material/science:"):
     st.markdown("""
     ### Data Processing Pipeline
@@ -98,7 +93,6 @@ with st.expander("Methodology", icon=":material/science:"):
     or if there are **significant differences** that would affect model generalization.
     """)
 
-# How to use section
 with st.expander("How to Use This App", icon=":material/explore:"):
     st.markdown("""
     ### :material/navigation: Navigation
@@ -126,7 +120,6 @@ with st.expander("How to Use This App", icon=":material/explore:"):
 
 st.divider()
 
-# Footer with dataset info
 st.info(
     "**Data Source:** UCI Machine Learning Repository - Heart Disease Dataset (Cleveland, Hungary, Switzerland, Long Beach VA)",
     icon=":material/data_info_alert:",

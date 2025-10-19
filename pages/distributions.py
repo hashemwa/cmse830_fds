@@ -1,11 +1,8 @@
 import streamlit as st
-
-# Import analysis functions as needed
 from analysis import (
     kde_by_origin,
 )
 
-# Get data from session state
 dfv = st.session_state.dfv
 df_raw_filtered = st.session_state.df_raw_filtered
 df = st.session_state.df

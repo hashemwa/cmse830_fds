@@ -1,7 +1,6 @@
 import streamlit as st
 from analysis import stacked_categorical
 
-# Get data from session state
 dfv = st.session_state.dfv
 
 st.title("Categories")

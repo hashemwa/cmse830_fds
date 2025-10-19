@@ -3,8 +3,6 @@ import pandas as pd
 import numpy as np
 import altair as alt
 from scipy.stats import gaussian_kde
-
-# Import analysis functions as needed
 from analysis import (
     get_individual_raw_datasets,
     get_individual_simple_imputed,
@@ -13,7 +11,6 @@ from analysis import (
     get_raw_data,
 )
 
-# Get data from session state
 dfv = st.session_state.dfv
 df_raw_filtered = st.session_state.df_raw_filtered
 df = st.session_state.df
@@ -24,7 +21,6 @@ age_range = st.session_state.age_range
 st.title("Imputation")
 st.markdown("*Comparing Simple vs KNN Imputation Methods*")
 
-# Methodology explanation
 st.warning(
     "**Methodology:** Each dataset was imputed **independently** to avoid data leakage across origins. "
     "This preserves the unique characteristics of each medical institution's data.",
@@ -44,7 +40,6 @@ with st.expander("Why KNN Imputation?", icon=":material/info:"):
     - :material/check_circle: Better maintains the original data distribution
     """)
 
-# Get imputed datasets
 raw_datasets = get_individual_raw_datasets()
 simple_datasets = get_individual_simple_imputed()
 knn_datasets = get_individual_knn_imputed()
@@ -52,7 +47,6 @@ knn_datasets = get_individual_knn_imputed()
 st.subheader("Individual Dataset Comparison")
 st.caption("Compare imputation methods for each dataset source.")
 
-# Create tabs for each dataset
 tabs = st.tabs(["Cleveland", "Hungary", "Long Beach VA", "Switzerland"])
 
 for idx, (dataset_name, tab) in enumerate(zip(raw_datasets.keys(), tabs)):
@@ -61,7 +55,6 @@ for idx, (dataset_name, tab) in enumerate(zip(raw_datasets.keys(), tabs)):
         simple_data = simple_datasets[dataset_name]
         knn_data = knn_datasets[dataset_name]
 
-        # Metrics comparison
         col1, col2, col3 = st.columns(3)
 
         with col1:
@@ -85,7 +78,6 @@ for idx, (dataset_name, tab) in enumerate(zip(raw_datasets.keys(), tabs)):
                 missing_knn,
             )
 
-        # Distribution comparison example
         st.markdown("**Distribution Comparison Example: Resting Blood Pressure**")
         st.caption(
             "Representative example showing how imputation methods affect distribution shape. "
@@ -93,7 +85,6 @@ for idx, (dataset_name, tab) in enumerate(zip(raw_datasets.keys(), tabs)):
         )
 
         if "trestbps" in raw_data.columns:
-            # Prepare data for KDE
             original_vals = raw_data["trestbps"].dropna().values
             simple_vals = simple_data["trestbps"].dropna().values
             knn_vals = knn_data["trestbps"].dropna().values
@@ -101,20 +92,17 @@ for idx, (dataset_name, tab) in enumerate(zip(raw_datasets.keys(), tabs)):
             if len(original_vals) > 1 and original_vals.std() > 0:
                 x_min = min(original_vals.min(), simple_vals.min(), knn_vals.min())
                 x_max = max(original_vals.max(), simple_vals.max(), knn_vals.max())
-                x_smooth = np.linspace(x_min, x_max, 100)  # Reduced from 200 to 100
+                x_smooth = np.linspace(x_min, x_max, 100)
 
-                # Compute KDE values vectorized (much faster)
                 try:
                     kde_orig = gaussian_kde(original_vals, bw_method="scott")
                     kde_simple = gaussian_kde(simple_vals, bw_method="scott")
                     kde_knn = gaussian_kde(knn_vals, bw_method="scott")
 
-                    # Evaluate all at once
                     y_orig = kde_orig(x_smooth)
                     y_simple = kde_simple(x_smooth)
                     y_knn = kde_knn(x_smooth)
 
-                    # Create DataFrame efficiently
                     chart_df = pd.DataFrame(
                         {
                             "trestbps (mmHg)": np.tile(x_smooth, 3),
@@ -126,7 +114,6 @@ for idx, (dataset_name, tab) in enumerate(zip(raw_datasets.keys(), tabs)):
                         }
                     )
 
-                    # Use line chart for better visibility of overlapping distributions
                     chart = (
                         alt.Chart(chart_df)
                         .mark_line(size=3)
@@ -177,7 +164,6 @@ for idx, (dataset_name, tab) in enumerate(zip(raw_datasets.keys(), tabs)):
 
 st.divider()
 
-# Combined dataset comparison
 st.subheader("Combined Dataset: Before vs After KNN Imputation")
 st.caption(
     "Compare the combined raw data with the final cleaned dataset after KNN imputation."
@@ -202,13 +188,11 @@ cat_cols = [
 ]
 available_cat = [c for c in cat_cols if c in combined_knn.columns]
 
-# Summary statistics comparison with single tab control
 st.markdown("**Summary Statistics Comparison**")
 
 feature_tabs = st.tabs(["Numerical", "Categorical"])
 
 with feature_tabs[0]:
-    # Numerical features side-by-side
     col1, col2 = st.columns(2)
 
     with col1:
@@ -232,13 +216,11 @@ with feature_tabs[0]:
             st.info("No numerical features available")
 
 with feature_tabs[1]:
-    # Categorical features side-by-side
     col1, col2 = st.columns(2)
 
     with col1:
         st.markdown("**Original (Raw Data)**")
         if available_cat:
-            # Calculate proper categorical statistics
             cat_stats = []
             for col in available_cat:
                 value_counts = combined_raw[col].value_counts()
@@ -258,7 +240,6 @@ with feature_tabs[1]:
     with col2:
         st.markdown("**After KNN Imputation**")
         if available_cat:
-            # Calculate proper categorical statistics
             cat_stats = []
             for col in available_cat:
                 value_counts = combined_knn[col].value_counts()

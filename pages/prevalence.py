@@ -1,16 +1,13 @@
 import streamlit as st
-
-# Import analysis functions as needed
 from analysis import (
     prevalence_bar,
 )
 
-# Get data from session state
-dfv = st.session_state.dfv
-df_raw_filtered = st.session_state.df_raw_filtered
-df = st.session_state.df
-origin_sel = st.session_state.origin_sel
-age_range = st.session_state.age_range
+dfv = st.session_state.dfv  # Filtered dataset
+df_raw_filtered = st.session_state.df_raw_filtered  # Raw filtered dataset
+df = st.session_state.df  # Complete dataset
+origin_sel = st.session_state.origin_sel  # Selected origin
+age_range = st.session_state.age_range  # Selected age range
 
 
 st.title("Prevalence")
