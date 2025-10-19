@@ -31,9 +31,9 @@ This dataset reveals real-world challenges in medical AI: distribution shifts, m
     -   This is the **base rate fallacy** in action
 2.  **Origin-Specific Missing Data Patterns**
     -   Hungary & Long Beach VA: `ca` (coronary vessels) = 0 for ALL patients
-    -   Switzerland: `chol` (cholesterol) = 0 for ALL patients\
-    -   These aren't true zeros—they represent different data collection procedures/equipment
-    -   Naive imputation would mask these institutional differences
+    -   Switzerland: `chol` (cholesterol) = 0 for ALL patients
+    -   These aren't true zeros. They most likely represent different data collection procedures/equipment
+    -   Imputation must respect these institutional differences to avoid bias
 3.  **Feature Distributions Vary Significantly**
     -   Blood pressure, cholesterol, and heart rate distributions differ across origins
     -   Example: `trestbps`-`age` correlation is 2x stronger in Switzerland (0.37) vs Long Beach (0.18)
@@ -49,9 +49,9 @@ This dataset reveals real-world challenges in medical AI: distribution shifts, m
 
 ### Evidence Against "One-Size-Fits-All" Models
 
-Every analysis page reveals origin-specific patterns: - **Distributions**: Different medians and shapes across origins - **Relationships**: Varying correlation structures in heatmaps - **Categories**: Different symptom/test result distributions - **Prevalence**: Dramatic base rate differences
+Every analysis page reveals origin-specific patterns: - **Distributions**: Different medians and shapes across origins - **Relationships**: Varying correlation structures in heatmaps - **Categories**: Different symptom/test result distributions - **Prevalence**: Differences in heart disease rates
 
-**Conclusion**: Models must account for these institutional differences through techniques like origin-stratified modeling, domain adaptation, or calibration.
+**Conclusion**: Models must account for these institutional differences to avoid biased predictions and ensure fairness in healthcare AI.
 
 ------------------------------------------------------------------------
 
@@ -75,7 +75,7 @@ Every analysis page reveals origin-specific patterns: - **Distributions**: Diffe
 
 -   Converted `?` symbols to `NaN` for proper missing value representation
 -   Identified origin-specific missing patterns (`ca`, `chol`)
--   **Preserved zeros as-is** to maintain data authenticity and reveal institutional differences
+-   Preserved zeros for ca and chol columns to maintain data authenticity and reveal institutional differences
 -   Missing data rates vary by origin (evidence of different protocols)
 
 ### 4. Imputation Strategy
@@ -108,21 +108,21 @@ Every analysis page reveals origin-specific patterns: - **Distributions**: Diffe
 
 ## What I've Built with Streamlit
 
-### Modern Multi-Page Architecture
+### Modern Multi-Page App
 
-Built an interactive dashboard using **Streamlit 1.46+** with horizontal navigation (`st.navigation(position="top")`). The app features a clean, professional design with consistent styling and Material icons throughout.
+Built an interactive dashboard using **Streamlit 1.50** with horizontal navigation. The app features a clean, professional design with consistent styling and Material icons throughout.
 
 ### Navigation Structure
 
-**Home** - Project overview with summary metrics - Problem statement with compelling statistics - Expandable sections for methodology and navigation guide
+**About** - Project overview with summary metrics. Problem statement with compelling statistics. Expandable sections for methodology and navigation guide
 
-**Initial Data Analysis** - **Data Overview**: Individual dataset statistics, feature descriptions, and data quality notes - **Missing Data**: Comprehensive analysis with metrics, heatmaps, and feature-level breakdowns
+**Initial Data Analysis** - **Data Overview**: Individual dataset statistics, feature descriptions, and data quality notes - **Missing Data**: Comprehensive analysis with metrics, heatmaps, and missingness patterns by origin
 
-**Data Cleaning** - **Imputation**: Side-by-side comparison of Simple vs KNN imputation methods with distribution preservation analysis - **Encoding**: Human-readable labels mapped to numeric codes for interpretability
+**Data Cleaning** - **Imputation**: Side-by-side comparison of Simple vs KNN imputation methods with distribution preservation analysis - **Encoding**: Labels mapped to numeric codes for interpretability
 
-**Exploratory Data Analysis** - **Distributions**: Interactive KDE plots comparing feature distributions across origins - **Relationships**: Age-heart rate scatter with LOESS trends + correlation heatmaps by origin - **Categories**: Stacked bar charts showing categorical feature distributions - **Prevalence**: Heart disease rates by origin revealing base rate differences
+**Exploratory Data Analysis** - **Distributions**: Interactive KDE plots comparing feature distributions across origins - **Relationships**: Age-heart rate scatter with LOESS trends and correlation heatmaps by origin - **Categories**: Stacked bar charts showing categorical feature distributions - **Prevalence**: Heart disease rates by origin revealing base rate differences
 
-**Data Export** - Preview of filtered/cleaned data - CSV download functionality with applied filters
+**Data Export** - Preview of filtered/cleaned data and CSV download functionality with applied filters
 
 ### Interactive Features
 
@@ -147,42 +147,40 @@ Built an interactive dashboard using **Streamlit 1.46+** with horizontal navigat
 
 -   **Session state management**: Efficient data sharing across pages
 -   **Proper categorical statistics**: Count/unique/top/freq instead of mean/std for encoded categories
--   **Material Design icons**: Professional visual elements throughout
+-   **Material Design icons**: Modern look and feel
 -   **Responsive metrics**: Dynamic calculations based on filtered data
 -   **Error handling**: Graceful fallbacks when data is insufficient
-
-### Storytelling Through Design
-
-Each page follows a consistent pattern: 1. **Title + Subtitle**: Clear page purpose 2. **Context**: Brief explanation of what users will see 3. **Visualization/Analysis**: Interactive charts and tables 4. **Info Box**: Connects findings to the overarching thesis about origin-specific patterns
-
-The app successfully transforms complex multi-origin data into an accessible narrative about why institutional differences matter for medical machine learning.
 
 ------------------------------------------------------------------------
 
 ## Repository Structure
 
 ```         
-├── app.py                      # Main Streamlit application (navigation router)
-├── analysis.py                 # Data processing pipeline and visualization functions
-├── pages/                      # Separate page files for each navigation item
-│   ├── about.py               # Home/landing page
-│   ├── data_overview.py       # Raw data exploration
-│   ├── missing_data.py        # Missing value analysis
-│   ├── imputation.py          # Imputation comparison
-│   ├── encoding.py            # Categorical encoding mappings
-│   ├── distributions.py       # Feature distribution analysis
-│   ├── relationships.py       # Feature relationships & correlations
-│   ├── categoricals.py        # Categorical variable analysis
-│   ├── prevalence.py          # Disease prevalence by origin
-│   └── data_export.py         # Download functionality
-├── data/                       # Raw UCI datasets
+├── app.py                        # Main Streamlit application (navigation router)
+├── analysis.py                   # Data processing pipeline and visualization functions
+├── pages/                        # Separate page files for each navigation item
+│   ├── about.py            
+│   ├── data_overview.py
+│   ├── missing_data.py
+│   ├── imputation.py
+│   ├── encoding.py
+│   ├── distributions.py
+│   ├── relationships.py
+│   ├── categoricals.py
+│   ├── prevalence.py
+│   └── data_export.py
+├── data/                          # Raw UCI datasets
 │   ├── cleveland.data
 │   ├── hungary.data
 │   ├── switzerland.data
-│   └── long_beach_va.data
-├── heart-disease.names         # Official UCI feature documentation
-├── features.txt                # Additional feature notes
-└── README.md                   # This file
+│   ├── long_beach_va.data
+│   └── documentation/             # Data documentation
+│       ├── heart-disease.names    # Official UCI feature documentation
+│       └── features.txt           # Additional feature notes
+├── cleaned_data.csv               # Final cleaned and imputed dataset
+├── notebook.ipynb                 # Extra notebook for better display
+├── requirements.txt               # Python dependencies
+└── README.md                      # Project documentation
 ```
 
 ------------------------------------------------------------------------
@@ -211,7 +209,7 @@ pip install -r requirements.txt
 -   `pandas` - Data manipulation
 -   `numpy` - Numerical operations
 -   `scikit-learn` - Imputation algorithms
--   `streamlit>=1.46` - Web app framework (requires 1.46+ for horizontal navigation)
+-   `streamlit` - Web app framework (requires 1.46+ for horizontal navigation)
 -   `altair` - Interactive visualizations
 -   `seaborn` - Statistical plots (for analysis.py)
 -   `matplotlib` - Plotting (for analysis.py)
@@ -227,55 +225,7 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-The app will open in your default browser at `http://localhost:8501`
-
-### Using the App
-
-1.  **Start at Home** to understand the project context
-2.  **Apply filters** in the sidebar (optional - defaults to all data)
-3.  **Navigate through sections** using the horizontal menu:
-    -   Begin with Data Overview and Missing Data to see raw patterns
-    -   Review Imputation and Encoding to understand cleaning steps
-    -   Explore Distributions, Relationships, and Categories for key findings
-    -   Check Prevalence for the most dramatic evidence
-    -   Download cleaned data from Data Export
-4.  **Read info boxes** at the bottom of each page for interpretation
-5.  **Interact with charts** - hover for details, click legends to filter
-
-------------------------------------------------------------------------
-
-## Methodology Summary
-
-### Data Processing Pipeline
-
-1.  **Load** → Four datasets from UCI repository
-2.  **Combine** → Add origin identifiers, create binary target
-3.  **Analyze** → Identify missing patterns and institutional differences
-4.  **Impute** → KNN (k=5) independently per origin
-5.  **Encode** → Add human-readable labels alongside numeric codes
-6.  **Export** → Clean dataset ready for modeling or further analysis
-
-### Key Design Decisions
-
--   **Per-origin imputation**: Prevents data leakage across institutions
--   **KNN over mean/mode**: Better preserves distributions and relationships
--   **Preserve zeros**: Maintains data authenticity and reveals procedural differences
--   **Dual encoding**: Supports both modeling (numeric) and interpretation (labels)
--   **Binary target**: Simplifies problem while maintaining clinical relevance
-
-------------------------------------------------------------------------
-
-## Key Findings
-
-1.  **Prevalence varies 2.7x** across origins (54% → 20%)
-2.  **Feature correlations differ by 2x+** between institutions
-3.  **Missing data patterns** reveal different testing procedures
-4.  **Distribution shifts** challenge model generalization
-5.  **Relationship structures** are population-dependent
-
-**Implication**: Origin-aware modeling is essential for medical AI fairness and accuracy.
-
-------------------------------------------------------------------------
+## The app will open in your default browser at `http://localhost:8501`
 
 ## Data Source
 

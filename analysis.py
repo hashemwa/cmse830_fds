@@ -7,10 +7,9 @@ import numpy as np
 import altair as alt
 from scipy.stats import gaussian_kde
 
-
+# Explore and Analysis
 alt.data_transformers.disable_max_rows()
 
-# Create data frames
 columns = [
     "age",
     "sex",
@@ -40,37 +39,31 @@ df_switzerland = pd.read_csv(
     "data/switzerland.data", na_values="?", names=columns
 ).drop_duplicates()
 
-# Add origin column to each DataFrame
 df_cleveland["origin"] = "Cleveland"
 df_hungary["origin"] = "Hungary"
 df_long_beach_va["origin"] = "Long Beach VA"
 df_switzerland["origin"] = "Switzerland"
 
-# Add target column
 df_cleveland["target"] = (df_cleveland["num"] > 0).astype(int)
 df_hungary["target"] = (df_hungary["num"] > 0).astype(int)
 df_switzerland["target"] = (df_switzerland["num"] > 0).astype(int)
 df_long_beach_va["target"] = (df_long_beach_va["num"] > 0).astype(int)
 
-# info
 print(df_cleveland.info())
 print(df_hungary.info())
 print(df_long_beach_va.info())
 print(df_switzerland.info())
 
-# describe
 print(df_cleveland.describe())
 print(df_hungary.describe())
 print(df_long_beach_va.describe())
 print(df_switzerland.describe())
 
-# Combine all DataFrames
 df_combined = pd.concat([df_cleveland, df_hungary, df_switzerland, df_long_beach_va])
 
 print(df_combined.info())
 print(df_combined.describe())
 
-# Missingness Heatmap
 plt.figure(figsize=(12, 6))
 sns.heatmap(df_combined.isnull(), cbar=False, cmap="viridis")
 plt.title("Missingness Heatmap")
@@ -80,10 +73,8 @@ plt.show()
 
 missing_counts_by_origin = df_combined.groupby("origin").apply(lambda g: g.isna().sum())
 
-# First, let's get the total number of missing values for each origin by summing across the columns (axis=1)
 total_missing_by_origin = missing_counts_by_origin.sum(axis=1)
 
-# Now, let's create a bar plot to visualize these totals
 plt.figure(figsize=(10, 6))
 sns.barplot(
     x=total_missing_by_origin.index, y=total_missing_by_origin.values, palette="viridis"
@@ -93,7 +84,6 @@ plt.xlabel("Data Source (Origin)")
 plt.ylabel("Total Count of Missing Cells")
 plt.show()
 
-# Missingness Rate by Column and Origin
 num_cols = df_combined.select_dtypes(include=[np.number]).columns.tolist()
 miss_by_origin = (
     df_combined.groupby("origin")[num_cols].apply(lambda g: g.isna().mean()).T
@@ -107,7 +97,6 @@ plt.ylabel("Column")
 plt.show()
 
 
-# Simple Imputer
 def simple_impute(df):
     df2 = df.copy()
 
@@ -140,20 +129,16 @@ df_combined_simple = pd.concat(
 )
 
 
-# KNN Imputer
 def knn_impute(df, n_neighbors=5):
     df2 = df.copy()
 
-    # Split columns
     num_cols = df2.select_dtypes(include=[np.number]).columns
     cat_cols = df2.select_dtypes(exclude=[np.number]).columns
 
-    # KNN for numeric columns
     if len(num_cols) > 0:
         knn = KNNImputer(n_neighbors=n_neighbors, weights="uniform")
         df2[num_cols] = knn.fit_transform(df2[num_cols])
 
-    # Most frequent for any non-numeric columns (if you ever have them)
     if len(cat_cols) > 0:
         cat_imp = SimpleImputer(strategy="most_frequent")
         df2[cat_cols] = cat_imp.fit_transform(df2[cat_cols])
@@ -170,13 +155,11 @@ df_combined_knn = pd.concat(
     [df_cleveland_knn, df_hungary_knn, df_switzerland_knn, df_long_beach_va_knn]
 )
 
-# Binary columns -> 0/1
 bin_cols = ["sex", "fbs", "exang", "target"]
 for c in bin_cols:
     if c in df_combined_knn.columns:
         df_combined_knn[c] = (df_combined_knn[c].clip(0, 1) >= 0.5).astype("Int64")
 
-# Ordinal/ranged codes
 range_cols = {
     "cp": (1, 4),
     "restecg": (0, 2),
@@ -188,7 +171,6 @@ for c, (lo, hi) in range_cols.items():
     if c in df_combined_knn.columns:
         df_combined_knn[c] = df_combined_knn[c].round().clip(lo, hi).astype("Int64")
 
-# thal must be one of {3, 6, 7}
 if "thal" in df_combined_knn.columns:
     allowed = np.array([3, 6, 7])
     df_combined_knn["thal"] = (
@@ -201,23 +183,18 @@ if "thal" in df_combined_knn.columns:
         .astype("Int64")
     )
 
-# Convert age to Int64
 if "age" in df_combined_knn.columns:
     df_combined_knn["age"] = (
         df_combined_knn["age"].round().clip(lower=0).astype("Int64")
     )
 
 
-# Set up the plot
 plt.figure(figsize=(12, 7))
 
-# Plot the distribution of the original data (where it's not missing)
-# We use a kernel density estimate (kde) plot, which is like a smooth histogram.
 sns.kdeplot(
     df_combined["trestbps"].dropna(), label="Original Data", color="blue", linewidth=2
 )
 
-# Plot the distribution of the data after Simple Imputation
 sns.kdeplot(
     df_combined_simple["trestbps"],
     label="Simple Imputation (Mean)",
@@ -225,12 +202,10 @@ sns.kdeplot(
     linestyle="--",
 )
 
-# Plot the distribution of the data after KNN Imputation
 sns.kdeplot(
     df_combined_knn["trestbps"], label="KNN Imputation", color="green", linestyle=":"
 )
 
-# Add titles and labels for clarity
 plt.title('Comparison of Data Distributions After Imputation for "trestbps"')
 plt.xlabel("Resting Blood Pressure (trestbps, mmHg)")
 plt.ylabel("Density")
@@ -239,14 +214,10 @@ plt.show()
 
 df_final = df_combined_knn
 
-# Set up the plot with a larger size for clarity
 plt.figure(figsize=(12, 8))
 
-# Create a box plot using seaborn
-# We will use your best dataset: df_final
 sns.boxplot(data=df_final, x="origin", y="oldpeak", palette="viridis")
 
-# Add titles and labels
 plt.title("ST Depression (oldpeak) by Data Source (Origin)")
 plt.xlabel("Data Source (Origin)")
 plt.ylabel("ST Depression (oldpeak)")
@@ -261,7 +232,6 @@ print(
     .round(2)
 )
 
-# Missingness Heatmap Imputed
 plt.figure(figsize=(12, 6))
 sns.heatmap(df_final.isnull(), cbar=False, cmap="viridis")
 plt.title("Missingness Heatmap After KNN Imputation")
@@ -318,18 +288,15 @@ df_final = (
 )
 
 
-# ==================== Streamlit App Content ====================
-# clean data for visualization
+# Streamlit App Content
 def get_clean_data(k=5):
     return df_final.copy()
 
 
-# raw data for missingness
 def get_raw_data():
     return df_combined.copy()
 
 
-# individual raw datasets for IDA display
 def get_individual_raw_datasets():
     return {
         "Cleveland": df_cleveland.copy(),
@@ -339,7 +306,6 @@ def get_individual_raw_datasets():
     }
 
 
-# individual simple imputed datasets
 def get_individual_simple_imputed():
     return {
         "Cleveland": df_cleveland_simple.copy(),
@@ -349,7 +315,6 @@ def get_individual_simple_imputed():
     }
 
 
-# individual KNN imputed datasets
 def get_individual_knn_imputed():
     return {
         "Cleveland": df_cleveland_knn.copy(),
@@ -359,17 +324,14 @@ def get_individual_knn_imputed():
     }
 
 
-# combined simple imputed
 def get_combined_simple_imputed():
     return df_combined_simple.copy()
 
 
-# combined KNN imputed (before label merging)
 def get_combined_knn_imputed():
     return df_combined_knn.copy()
 
 
-# colors for origins
 COLOR_MAP = {
     "Cleveland": "#4c78a8",
     "Hungary": "#f58518",
@@ -377,7 +339,6 @@ COLOR_MAP = {
     "Switzerland": "#e45756",
 }
 
-# category orders for categorical variables
 CATEGORY_ORDERS = {
     "cp_label": [
         "typical angina",
@@ -399,7 +360,6 @@ CATEGORY_ORDERS = {
 
 
 def kde_by_origin(df, col):
-    # variable labels and units
     var_labels = {
         "trestbps": "Resting Blood Pressure",
         "chol": "Serum Cholesterol",
@@ -415,11 +375,9 @@ def kde_by_origin(df, col):
     x_min = df[col].min()
     x_max = df[col].max()
 
-    # handle where all values are the same
     if x_max - x_min < 1e-10:
         return None
 
-    # 200 smooth points for x-axis
     x_smooth = np.linspace(x_min, x_max, 200)
 
     density_data = {}
@@ -427,12 +385,11 @@ def kde_by_origin(df, col):
         origin_data = df[df["origin"] == origin][col].dropna().values
         if len(origin_data) > 1 and origin_data.std() > 1e-10:
             try:
-                # gaussian KDE for smooth density curves
                 kde = gaussian_kde(origin_data, bw_method="scott")
                 density = kde(x_smooth)
                 density_data[origin] = density
             except (np.linalg.LinAlgError, ValueError):
-                # fallback to interpolated histogram if KDE fails
+                # Fallback to interpolated histogram if KDE fails
                 bins = np.linspace(origin_data.min(), origin_data.max(), 50)
                 counts, _ = np.histogram(origin_data, bins=bins, density=True)
                 bin_centers = (bins[:-1] + bins[1:]) / 2
@@ -488,7 +445,6 @@ def kde_by_origin(df, col):
 
 
 def thalach_vs_age_trend(df):
-    # multi-line tooltip
     hover = alt.selection_point(
         fields=["age"],
         nearest=True,
@@ -496,7 +452,6 @@ def thalach_vs_age_trend(df):
         empty=False,
     )
 
-    # loess trend lines by origin
     lines = (
         alt.Chart(df)
         .transform_loess("age", "thalach", groupby=["origin"])
@@ -531,7 +486,6 @@ def thalach_vs_age_trend(df):
         .add_params(hover)
     )
 
-    # vertical line to show where you're hovering
     rule = (
         alt.Chart(df)
         .transform_loess("age", "thalach", groupby=["origin"])
@@ -546,7 +500,6 @@ def thalach_vs_age_trend(df):
 
 
 def stacked_categorical(df, cat_col):
-    # descriptive titles for legend
     legend_titles = {
         "cp_label": "Chest Pain Type",
         "restecg_label": "Resting ECG",
@@ -555,7 +508,6 @@ def stacked_categorical(df, cat_col):
         "num_label": "Disease Severity",
     }
 
-    # order categories legend
     df_copy = df.copy()
     if cat_col in CATEGORY_ORDERS:
         df_copy[cat_col] = pd.Categorical(
@@ -565,7 +517,6 @@ def stacked_categorical(df, cat_col):
     cat_df = df_copy.groupby(["origin", cat_col]).size().reset_index(name="n")
     cat_df["pct"] = cat_df.groupby("origin")["n"].transform(lambda x: 100 * x / x.sum())
 
-    # order categories stack within each bar
     if cat_col in CATEGORY_ORDERS:
         cat_df["cat_rank"] = cat_df[cat_col].cat.codes
 
@@ -640,7 +591,6 @@ def prevalence_bar(df):
 
 
 def missingness_heatmap(df, cols):
-    # missingness rate by origin for each column
     miss_by_origin = df.groupby("origin")[cols].apply(lambda g: g.isna().mean() * 100)
 
     miss_long = miss_by_origin.reset_index().melt(
@@ -700,21 +650,17 @@ def correlation_heatmap(df):
     Returns:
         Altair chart object showing correlation heatmap
     """
-    # Select numerical columns (exclude origin which is categorical)
     num_cols = ["age", "trestbps", "chol", "thalach", "oldpeak", "ca"]
     available_cols = [c for c in num_cols if c in df.columns]
 
-    # Add target if available
     if "target" in df.columns:
         available_cols.append("target")
 
     if len(available_cols) < 2:
         return None
 
-    # Calculate correlation matrix
     corr_matrix = df[available_cols].corr()
 
-    # Reshape for Altair (long format)
     corr_data = []
     for i, row_var in enumerate(corr_matrix.index):
         for j, col_var in enumerate(corr_matrix.columns):
@@ -728,7 +674,6 @@ def correlation_heatmap(df):
 
     corr_df = pd.DataFrame(corr_data)
 
-    # Create heatmap
     heatmap = (
         alt.Chart(corr_df)
         .mark_rect()
@@ -752,7 +697,6 @@ def correlation_heatmap(df):
         .properties(height=400)
     )
 
-    # Add text labels for correlation values
     text = (
         alt.Chart(corr_df)
         .mark_text(fontSize=10)
