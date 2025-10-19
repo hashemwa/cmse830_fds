@@ -101,9 +101,16 @@ for idx, (dataset_name, tab) in enumerate(zip(raw_datasets.keys(), tabs)):
                         }
                     )
 
-                    chart = (
+                    hover = alt.selection_point(
+                        fields=["trestbps (mmHg)"],
+                        nearest=True,
+                        on="mouseover",
+                        empty=False,
+                    )
+
+                    lines = (
                         alt.Chart(chart_df)
-                        .mark_line(size=3)
+                        .mark_line(size=3, interpolate="natural")
                         .encode(
                             x=alt.X(
                                 "trestbps (mmHg):Q",
@@ -127,6 +134,13 @@ for idx, (dataset_name, tab) in enumerate(zip(raw_datasets.keys(), tabs)):
                                 ),
                                 legend=alt.Legend(title="Method", orient="right"),
                             ),
+                        )
+                    )
+
+                    points = (
+                        lines.mark_point(size=100)
+                        .encode(
+                            opacity=alt.condition(hover, alt.value(1), alt.value(0)),
                             tooltip=[
                                 alt.Tooltip("Method:N", title="Method"),
                                 alt.Tooltip(
@@ -137,8 +151,20 @@ for idx, (dataset_name, tab) in enumerate(zip(raw_datasets.keys(), tabs)):
                                 alt.Tooltip("Density:Q", title="Density", format=".4f"),
                             ],
                         )
-                        .properties(height=400)
+                        .add_params(hover)
                     )
+
+                    rule = (
+                        alt.Chart(chart_df)
+                        .mark_rule(color="gray", strokeWidth=1)
+                        .encode(
+                            x="trestbps (mmHg):Q",
+                            opacity=alt.condition(hover, alt.value(0.5), alt.value(0)),
+                        )
+                        .transform_filter(hover)
+                    )
+
+                    chart = (lines + points + rule).properties(height=400)
 
                     st.altair_chart(chart, use_container_width=True)
                     st.caption(
