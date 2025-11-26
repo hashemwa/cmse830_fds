@@ -238,6 +238,62 @@ The app will open in your default browser at `http://localhost:8501`
 
 ------------------------------------------------------------------------
 
+## Data Dictionary
+
+| Feature | Type | Description | Values/Range |
+|---------|------|-------------|--------------|
+| `age` | Numeric | Age in years | 29-77 |
+| `sex` | Binary | Biological sex | 0=Female, 1=Male |
+| `cp` | Categorical | Chest pain type | 1=Typical angina, 2=Atypical angina, 3=Non-anginal pain, 4=Asymptomatic |
+| `trestbps` | Numeric | Resting blood pressure (mm Hg) | 94-200 |
+| `chol` | Numeric | Serum cholesterol (mg/dl) | 126-564 (0=not collected in Switzerland) |
+| `fbs` | Binary | Fasting blood sugar > 120 mg/dl | 0=False, 1=True |
+| `restecg` | Categorical | Resting ECG results | 0=Normal, 1=ST-T abnormality, 2=LVH |
+| `thalach` | Numeric | Maximum heart rate achieved | 71-202 |
+| `exang` | Binary | Exercise-induced angina | 0=No, 1=Yes |
+| `oldpeak` | Numeric | ST depression induced by exercise | 0.0-6.2 |
+| `slope` | Categorical | Slope of peak exercise ST segment | 1=Upsloping, 2=Flat, 3=Downsloping |
+| `ca` | Numeric | Number of major vessels colored by fluoroscopy | 0-3 |
+| `thal` | Categorical | Thalassemia | 3=Normal, 6=Fixed defect, 7=Reversible defect |
+| `num` | Categorical | Diagnosis of heart disease | 0=No disease, 1-4=Disease severity |
+| `target` | Binary | Heart disease present (derived) | 0=No, 1=Yes |
+| `origin` | Categorical | Data source institution | Cleveland, Hungary, Long Beach VA, Switzerland |
+
+### Feature Reliability by Origin
+
+| Feature | Cleveland | Hungary | Long Beach VA | Switzerland |
+|---------|-----------|---------|---------------|-------------|
+| `ca` | ✅ Complete | ❌ 99% missing | ❌ 99% missing | ❌ 96% missing |
+| `thal` | ✅ Complete | ❌ 90% missing | ❌ 83% missing | ⚠️ 42% missing |
+| `slope` | ✅ Complete | ❌ 65% missing | ❌ 51% missing | ⚠️ 14% missing |
+| `fbs` | ✅ Complete | ✅ 3% missing | ✅ 4% missing | ❌ 61% missing |
+| `chol` | ✅ Complete | ✅ 8% missing | ✅ 4% missing | ❌ All zeros |
+
+**Modeling Note:** Features with >50% missing in any origin (`ca`, `thal`, `slope`, `fbs`, `chol`) are excluded from modeling to avoid imputation artifacts.
+
+------------------------------------------------------------------------
+
+## Modeling Approach
+
+### Models Implemented
+
+1. **Global Logistic Regression** - Linear baseline trained on all origins combined
+2. **Global Decision Tree** - Non-linear model (max_depth=5) trained on all origins
+3. **Origin-Stratified Logistic Regression** - Separate models trained per institution
+
+### Evaluation Metrics
+
+- **Accuracy, Precision, Recall, F1-Score** - Standard classification metrics
+- **ROC-AUC** - Area under the receiver operating characteristic curve
+- **5-Fold Stratified Cross-Validation** - Robust accuracy estimation
+- **Per-Origin Performance Breakdown** - Tests generalization across institutions
+
+### Key Finding
+
+After removing unreliable features (ca, thal, slope, fbs, chol), all three modeling approaches achieve similar accuracy (~75-80%). This suggests that institutional differences were primarily in **data collection practices** rather than underlying disease patterns. The 8 reliable features (age, sex, cp, trestbps, restecg, thalach, exang, oldpeak) are consistent enough across institutions for a global model to generalize.
+
+------------------------------------------------------------------------
+
 ## Author
 
 **Wahid Hashem**\

@@ -23,8 +23,8 @@ cleaning_imputation = st.Page(
 )
 cleaning_encoding = st.Page(
     "pages/encoding.py",
-    title="Encoding",
-    icon=":material/engineering:",
+    title="Feature Engineering",
+    icon=":material/build:",
 )
 
 eda_distributions = st.Page(
@@ -44,6 +44,10 @@ eda_prevalence = st.Page(
     "pages/prevalence.py", title="Prevalence", icon=":material/monitoring:"
 )
 
+modeling_page = st.Page(
+    "pages/modeling.py", title="Model Development", icon=":material/model_training:"
+)
+
 export_page = st.Page(
     "pages/data_export.py", title="Download", icon=":material/download:"
 )
@@ -59,6 +63,7 @@ pg = st.navigation(
             eda_categoricals,
             eda_prevalence,
         ],
+        "Modeling": [modeling_page],
         "Data Export": [export_page],
     },
     position="top",

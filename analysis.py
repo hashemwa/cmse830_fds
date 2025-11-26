@@ -3,6 +3,8 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from sklearn.impute import SimpleImputer
 from sklearn.impute import KNNImputer
+from sklearn.experimental import enable_iterative_imputer
+from sklearn.impute import IterativeImputer
 import numpy as np
 import altair as alt
 from scipy.stats import gaussian_kde
@@ -146,6 +148,23 @@ def knn_impute(df, n_neighbors=5):
     return df2
 
 
+def mice_impute(df, max_iter=10, random_state=0):
+    df2 = df.copy()
+
+    num_cols = df2.select_dtypes(include=[np.number]).columns
+    cat_cols = df2.select_dtypes(exclude=[np.number]).columns
+
+    if len(num_cols) > 0:
+        mice = IterativeImputer(max_iter=max_iter, random_state=random_state)
+        df2[num_cols] = mice.fit_transform(df2[num_cols])
+
+    if len(cat_cols) > 0:
+        cat_imp = SimpleImputer(strategy="most_frequent")
+        df2[cat_cols] = cat_imp.fit_transform(df2[cat_cols])
+
+    return df2
+
+
 df_cleveland_knn = knn_impute(df_cleveland, n_neighbors=5)
 df_hungary_knn = knn_impute(df_hungary, n_neighbors=5)
 df_switzerland_knn = knn_impute(df_switzerland, n_neighbors=5)
@@ -153,6 +172,15 @@ df_long_beach_va_knn = knn_impute(df_long_beach_va, n_neighbors=5)
 
 df_combined_knn = pd.concat(
     [df_cleveland_knn, df_hungary_knn, df_switzerland_knn, df_long_beach_va_knn]
+)
+
+df_cleveland_mice = mice_impute(df_cleveland)
+df_hungary_mice = mice_impute(df_hungary)
+df_switzerland_mice = mice_impute(df_switzerland)
+df_long_beach_va_mice = mice_impute(df_long_beach_va)
+
+df_combined_mice = pd.concat(
+    [df_cleveland_mice, df_hungary_mice, df_switzerland_mice, df_long_beach_va_mice]
 )
 
 bin_cols = ["sex", "fbs", "exang", "target"]
@@ -324,12 +352,25 @@ def get_individual_knn_imputed():
     }
 
 
+def get_individual_mice_imputed():
+    return {
+        "Cleveland": df_cleveland_mice.copy(),
+        "Hungary": df_hungary_mice.copy(),
+        "Long Beach VA": df_long_beach_va_mice.copy(),
+        "Switzerland": df_switzerland_mice.copy(),
+    }
+
+
 def get_combined_simple_imputed():
     return df_combined_simple.copy()
 
 
 def get_combined_knn_imputed():
     return df_combined_knn.copy()
+
+
+def get_combined_mice_imputed():
+    return df_combined_mice.copy()
 
 
 COLOR_MAP = {
