@@ -84,7 +84,7 @@ with tab1:
             ],
         }
     )
-    st.dataframe(cp_mapping, use_container_width=True, hide_index=True)
+    st.dataframe(cp_mapping, use_container_width=True, hide_index=True, height=178)
 
 with tab2:
     restecg_mapping = pd.DataFrame(
@@ -98,7 +98,7 @@ with tab2:
             ],
         }
     )
-    st.dataframe(restecg_mapping, use_container_width=True, hide_index=True)
+    st.dataframe(restecg_mapping, use_container_width=True, hide_index=True, height=143)
 
 with tab3:
     slope_mapping = pd.DataFrame(
@@ -112,7 +112,7 @@ with tab3:
             ],
         }
     )
-    st.dataframe(slope_mapping, use_container_width=True, hide_index=True)
+    st.dataframe(slope_mapping, use_container_width=True, hide_index=True, height=143)
 
 with tab4:
     thal_mapping = pd.DataFrame(
@@ -126,7 +126,7 @@ with tab4:
             ],
         }
     )
-    st.dataframe(thal_mapping, use_container_width=True, hide_index=True)
+    st.dataframe(thal_mapping, use_container_width=True, hide_index=True, height=143)
 
 with tab5:
     num_mapping = pd.DataFrame(
@@ -141,7 +141,7 @@ with tab5:
             ],
         }
     )
-    st.dataframe(num_mapping, use_container_width=True, hide_index=True)
+    st.dataframe(num_mapping, use_container_width=True, hide_index=True, height=213)
 
 label_cols = ["cp_label", "restecg_label", "slope_label", "thal_label", "num_label"]
 original_cols = ["cp", "restecg", "slope", "thal", "num"]
@@ -154,11 +154,11 @@ if all(col in df.columns for col in label_cols):
 
     with col_before:
         st.caption("Original (Numeric)")
-        st.dataframe(sample_df[original_cols], use_container_width=True)
+        st.dataframe(sample_df[original_cols], use_container_width=True, height=213)
 
     with col_after:
         st.caption("Transformed (Labels)")
-        st.dataframe(sample_df[label_cols], use_container_width=True)
+        st.dataframe(sample_df[label_cols], use_container_width=True, height=213)
 
 st.divider()
 
@@ -200,11 +200,11 @@ if available_num:
 
     with col1:
         st.markdown("**Before Scaling**")
-        st.dataframe(raw_stats.round(2), use_container_width=True)
+        st.dataframe(raw_stats.round(2), use_container_width=True, height=178)
 
     with col2:
         st.markdown("**After StandardScaler**")
-        st.dataframe(scaled_stats.round(2), use_container_width=True)
+        st.dataframe(scaled_stats.round(2), use_container_width=True, height=178)
 
 st.divider()
 
@@ -223,7 +223,7 @@ derived_features = pd.DataFrame(
     }
 )
 
-st.dataframe(derived_features, hide_index=True, use_container_width=True)
+st.dataframe(derived_features, hide_index=True, use_container_width=True, height=143)
 
 if "age" in dfv.columns and "thalach" in dfv.columns:
     with st.expander(
@@ -273,11 +273,11 @@ with col1:
 with col2:
     st.error("**Unreliable Features (Excluded)**")
     st.markdown("""
-- `ca` - 99% missing in 3/4 origins
-- `thal` - 83-90% missing in 3/4 origins
-- `slope` - 51-65% missing in 3/4 origins
+- `ca` - 95-99% missing in 3/4 origins
+- `thal` - 42-90% missing in 3/4 origins
+- `slope` - 51-65% missing in 2/4 origins
 - `fbs` - 61% missing in Switzerland
-- `chol` - All zeros in Switzerland
+- `chol` - 100% missing in Switzerland (recorded as zeros)
 """)
 
 st.divider()

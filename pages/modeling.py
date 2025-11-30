@@ -6,7 +6,10 @@ from sklearn.model_selection import train_test_split, cross_val_score, Stratifie
 from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.preprocessing import StandardScaler
-from sklearn.pipeline import make_pipeline
+from sklearn.pipeline import Pipeline
+from sklearn.impute import KNNImputer
+from sklearn.experimental import enable_iterative_imputer  # noqa
+from sklearn.impute import IterativeImputer
 from sklearn.metrics import (
     accuracy_score,
     precision_score,
@@ -16,76 +19,329 @@ from sklearn.metrics import (
     auc,
     confusion_matrix,
 )
-from analysis import get_clean_data
+from analysis import get_raw_data
 
 st.title("Model Development")
-st.markdown("*Testing the 'One Size Fits All' Hypothesis*")
+st.markdown("*Can one model work for all hospitals, or do we need separate models?*")
 
-# Load data
-df = get_clean_data()
+st.caption(
+    ":material/info: This page uses all data (ignoring sidebar filters) to ensure proper train/test splitting."
+)
 
-# Features with high missingness that should be dropped
-HIGH_MISSING_FEATURES = ["ca", "thal", "slope", "fbs", "chol"]
+with st.expander("About the Models", icon=":material/info:"):
+    st.markdown("""
+    We compare **three approaches** to predict heart disease:
+    
+    | Model | What it does |
+    |-------|-------------|
+    | **Global Logistic Regression** | One model for ALL patients. Assumes the same patterns work everywhere. |
+    | **Global Decision Tree** | One tree model that can find patterns like "if age > 55 AND chest pain type = 4 → high risk". |
+    | **Origin-Stratified** | Four SEPARATE models — one per hospital. Each patient uses their own hospital's model. |
+    
+    **The question:** Do hospitals share the same disease patterns, or are they too different?
+    """)
 
-# Define features - only those reliably collected across all origins
-feature_cols = [
+
+# ========== HELPER FUNCTIONS ==========
+
+
+def get_unreliable_features(df: pd.DataFrame, threshold: float = 0.5) -> list:
+    """
+    Dynamically identify features where missingness exceeds threshold in ANY origin.
+    Note: "Fake zeros" (like chol in Switzerland) are converted to NaN in analysis.py
+    """
+    unreliable = set()
+
+    for origin in df["origin"].unique():
+        origin_data = df[df["origin"] == origin]
+        missing_rates = (
+            origin_data.drop(columns=["origin", "target", "num"], errors="ignore")
+            .isnull()
+            .mean()
+        )
+
+        high_missing = missing_rates[missing_rates > threshold].index.tolist()
+        unreliable.update(high_missing)
+
+    return sorted(list(unreliable))
+
+
+def preprocess_origin_aware(
+    X_train: pd.DataFrame,
+    X_test: pd.DataFrame,
+    y_train: pd.Series,
+    origins_train: pd.Series,
+    origins_test: pd.Series,
+    n_neighbors: int = 5,
+) -> tuple:
+    """
+    Apply KNN imputation per-origin to avoid mixing hospital distributions.
+    Fit on training data only, transform both train and test.
+    """
+    X_train_imputed = X_train.copy()
+    X_test_imputed = X_test.copy()
+
+    imputers = {}
+
+    for origin in origins_train.unique():
+        mask_train = origins_train == origin
+        X_origin = X_train[mask_train]
+
+        if len(X_origin) > n_neighbors:
+            imputer = KNNImputer(n_neighbors=n_neighbors, weights="distance")
+            imputer.fit(X_origin)
+            imputers[origin] = imputer
+            X_train_imputed.loc[mask_train, :] = imputer.transform(X_origin)
+
+    for origin in origins_test.unique():
+        mask_test = origins_test == origin
+        X_origin_test = X_test[mask_test]
+
+        if origin in imputers and len(X_origin_test) > 0:
+            X_test_imputed.loc[mask_test, :] = imputers[origin].transform(X_origin_test)
+        elif len(X_origin_test) > 0:
+            global_imputer = KNNImputer(n_neighbors=n_neighbors, weights="distance")
+            global_imputer.fit(X_train)
+            X_test_imputed.loc[mask_test, :] = global_imputer.transform(X_origin_test)
+
+    categorical_cols = ["sex", "cp", "fbs", "restecg", "exang"]
+    for col in categorical_cols:
+        if col in X_train_imputed.columns:
+            X_train_imputed[col] = X_train_imputed[col].round().astype(int)
+            X_test_imputed[col] = X_test_imputed[col].round().astype(int)
+
+    return X_train_imputed, X_test_imputed
+
+
+def preprocess_mice_origin_aware(
+    X_train: pd.DataFrame,
+    X_test: pd.DataFrame,
+    y_train: pd.Series,
+    origins_train: pd.Series,
+    origins_test: pd.Series,
+    max_iter: int = 10,
+    random_state: int = 42,
+) -> tuple:
+    """
+    Apply MICE (IterativeImputer) per-origin to avoid mixing hospital distributions.
+    Fit on training data only, transform both train and test.
+    """
+    X_train_imputed = X_train.copy()
+    X_test_imputed = X_test.copy()
+
+    imputers = {}
+
+    for origin in origins_train.unique():
+        mask_train = origins_train == origin
+        X_origin = X_train[mask_train]
+
+        if len(X_origin) > 5:  # Need enough samples for MICE
+            imputer = IterativeImputer(
+                max_iter=max_iter,
+                random_state=random_state,
+                initial_strategy="mean",
+            )
+            imputer.fit(X_origin)
+            imputers[origin] = imputer
+            X_train_imputed.loc[mask_train, :] = imputer.transform(X_origin)
+
+    for origin in origins_test.unique():
+        mask_test = origins_test == origin
+        X_origin_test = X_test[mask_test]
+
+        if origin in imputers and len(X_origin_test) > 0:
+            X_test_imputed.loc[mask_test, :] = imputers[origin].transform(X_origin_test)
+        elif len(X_origin_test) > 0:
+            # Fallback to global imputer
+            global_imputer = IterativeImputer(
+                max_iter=max_iter,
+                random_state=random_state,
+                initial_strategy="mean",
+            )
+            global_imputer.fit(X_train)
+            X_test_imputed.loc[mask_test, :] = global_imputer.transform(X_origin_test)
+
+    categorical_cols = ["sex", "cp", "fbs", "restecg", "exang"]
+    for col in categorical_cols:
+        if col in X_train_imputed.columns:
+            X_train_imputed[col] = X_train_imputed[col].round().astype(int)
+            X_test_imputed[col] = X_test_imputed[col].round().astype(int)
+
+    return X_train_imputed, X_test_imputed
+
+
+# ========== LOAD RAW DATA ==========
+df_raw = get_raw_data()
+
+# Sidebar configuration
+st.sidebar.subheader("Model Configuration")
+
+missing_threshold = st.sidebar.slider(
+    "Missingness Threshold",
+    0.1,
+    0.9,
+    0.5,
+    0.1,
+    help="Drop features with >X% missing in any origin",
+)
+
+unreliable_features = get_unreliable_features(df_raw, threshold=missing_threshold)
+
+drop_unreliable = st.sidebar.checkbox(
+    "Drop unreliable features",
+    value=True,
+    help=f"Auto-detected: {', '.join(unreliable_features) if unreliable_features else 'None'}",
+)
+
+test_size = st.sidebar.slider("Test Set Size", 0.1, 0.5, 0.2, 0.05)
+
+imputation_method = st.sidebar.radio(
+    "Imputation Method",
+    ["KNN", "MICE"],
+    index=1,  # Default to MICE
+    help="KNN: K-Nearest Neighbors | MICE: Multiple Imputation by Chained Equations",
+)
+
+if imputation_method == "KNN":
+    n_neighbors = st.sidebar.slider("KNN Neighbors", 3, 10, 5, 1)
+    mice_max_iter = 10  # default, not used
+else:
+    mice_max_iter = st.sidebar.slider("MICE Max Iterations", 5, 20, 10, 1)
+    n_neighbors = 5  # default, not used
+
+random_state = 42
+
+if unreliable_features:
+    with st.sidebar.expander("Unreliable Features"):
+        for feat in unreliable_features:
+            max_missing = 0
+            worst_origin = ""
+            for origin in df_raw["origin"].unique():
+                origin_data = df_raw[df_raw["origin"] == origin]
+                if feat in origin_data.columns:
+                    missing_rate = origin_data[feat].isnull().mean()
+                    if missing_rate > max_missing:
+                        max_missing = missing_rate
+                        worst_origin = origin
+            st.caption(f"**{feat}**: {max_missing:.0%} missing in {worst_origin}")
+
+all_features = [
     "age",
     "sex",
     "cp",
     "trestbps",
+    "chol",
+    "fbs",
     "restecg",
     "thalach",
     "exang",
     "oldpeak",
+    "slope",
+    "ca",
+    "thal",
 ]
 target_col = "target"
 
-# Sidebar configuration
-st.sidebar.subheader("Model Configuration")
-drop_high_missing = st.sidebar.checkbox(
-    "Drop unreliable features",
-    value=True,
-    help="Removes ca, thal, slope, fbs, chol to avoid imputation artifacts",
-)
-test_size = st.sidebar.slider("Test Set Size", 0.1, 0.5, 0.2, 0.05)
-random_state = 42
+if drop_unreliable:
+    feature_cols = [f for f in all_features if f not in unreliable_features]
+else:
+    feature_cols = all_features
 
-if not drop_high_missing:
-    feature_cols = feature_cols + HIGH_MISSING_FEATURES
+available_features = [c for c in feature_cols if c in df_raw.columns]
 
-available_features = [c for c in feature_cols if c in df.columns]
+# ========== PREPARE DATA ==========
+X = df_raw[available_features].copy()
+y = df_raw[target_col].copy()
+origins = df_raw["origin"].copy()
 
-# Summary metrics at top
+valid_mask = y.notna()
+X = X[valid_mask]
+y = y[valid_mask]
+origins = origins[valid_mask]
+
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("Features", len(available_features))
-col2.metric("Samples", len(df))
+col2.metric("Raw Samples", len(X))
 col3.metric("Test Size", f"{test_size:.0%}")
-col4.metric("Origins", df["origin"].nunique())
+col4.metric("Origins", origins.nunique())
 
-# Prepare X and y
-X = df[available_features].copy()
-y = df[target_col].copy()
-origins = df["origin"].copy()
-
-# Check for NaNs
-if X.isna().any().any():
-    st.warning(
-        "Data contains missing values. Dropping rows with missing values for modeling."
-    )
-    X = X.dropna()
-    y = y[X.index]
-    origins = origins[X.index]
-
+# ========== TRAIN/TEST SPLIT FIRST ==========
 X_train, X_test, y_train, y_test, origins_train, origins_test = train_test_split(
     X, y, origins, test_size=test_size, random_state=random_state, stratify=y
 )
 
 st.divider()
 
-st.subheader("Model Training")
-st.caption("Comparing global models vs origin-stratified models")
+# ========== IMPUTATION ==========
+st.subheader("Data Preprocessing")
+st.caption(
+    f"Missing values filled using {imputation_method}, separately for each hospital"
+)
 
-# ========== GLOBAL MODELS ==========
+with st.expander("Why split before imputation?", icon=":material/help:"):
+    st.markdown("""
+    **Preventing Data Leakage:**
+    
+    We split into train/test sets **BEFORE** filling in missing values. Why?
+    
+    - If we imputed first, test patients' missing values would be filled using training data
+    - This "leaks" training information into the test set
+    - The model would appear better than it actually is
+    
+    **Our approach:** Fit the imputer on training data only, then apply it to both sets.
+    This keeps the test set truly "unseen" for fair evaluation.
+    """)
+
+with st.spinner(f"Applying origin-aware {imputation_method} imputation..."):
+    if imputation_method == "KNN":
+        X_train_imputed, X_test_imputed = preprocess_origin_aware(
+            X_train,
+            X_test,
+            y_train,
+            origins_train,
+            origins_test,
+            n_neighbors=n_neighbors,
+        )
+    else:  # MICE
+        X_train_imputed, X_test_imputed = preprocess_mice_origin_aware(
+            X_train,
+            X_test,
+            y_train,
+            origins_train,
+            origins_test,
+            max_iter=mice_max_iter,
+            random_state=random_state,
+        )
+
+train_nans = X_train_imputed.isnull().sum().sum()
+test_nans = X_test_imputed.isnull().sum().sum()
+
+col_imp1, col_imp2, col_imp3 = st.columns(3)
+col_imp1.metric("Training Samples", len(X_train_imputed))
+col_imp2.metric("Test Samples", len(X_test_imputed))
+col_imp3.metric("Remaining NaNs", train_nans + test_nans)
+
+if train_nans + test_nans > 0:
+    st.warning(
+        f"{train_nans + test_nans} NaN values remain. Dropping affected rows.",
+        icon=":material/warning:",
+    )
+    train_valid = X_train_imputed.notna().all(axis=1)
+    test_valid = X_test_imputed.notna().all(axis=1)
+
+    X_train_imputed = X_train_imputed[train_valid]
+    y_train = y_train[train_valid]
+    origins_train = origins_train[train_valid]
+
+    X_test_imputed = X_test_imputed[test_valid]
+    y_test = y_test[test_valid]
+    origins_test = origins_test[test_valid]
+
+st.divider()
+
+st.subheader("Model Training")
+st.caption("Training one global model vs. separate models for each hospital")
+
 tab_global, tab_stratified = st.tabs(["Global Models", "Origin-Stratified"])
 
 with tab_global:
@@ -93,22 +349,27 @@ with tab_global:
 
     with col_m1:
         st.markdown("**Logistic Regression**")
-        global_lr = make_pipeline(
-            StandardScaler(),
-            LogisticRegression(max_iter=1000, random_state=random_state),
+        global_lr = Pipeline(
+            [
+                ("scaler", StandardScaler()),
+                (
+                    "classifier",
+                    LogisticRegression(max_iter=1000, random_state=random_state),
+                ),
+            ]
         )
-        global_lr.fit(X_train, y_train)
+        global_lr.fit(X_train_imputed, y_train)
         st.caption("StandardScaler + Logistic Regression")
 
     with col_m2:
         st.markdown("**Decision Tree**")
         global_dt = DecisionTreeClassifier(max_depth=5, random_state=random_state)
-        global_dt.fit(X_train, y_train)
+        global_dt.fit(X_train_imputed, y_train)
         st.caption("Max Depth = 5")
 
     st.metric(
         "Training Samples",
-        f"{X_train.shape[0]:,}",
+        f"{X_train_imputed.shape[0]:,}",
         delta="all origins combined",
         delta_color="off",
     )
@@ -122,13 +383,18 @@ with tab_stratified:
 
     for origin in sorted(origins_train.unique()):
         origin_mask_train = origins_train == origin
-        X_origin_train = X_train[origin_mask_train]
+        X_origin_train = X_train_imputed[origin_mask_train]
         y_origin_train = y_train[origin_mask_train]
 
         if len(X_origin_train) > 10:
-            model = make_pipeline(
-                StandardScaler(),
-                LogisticRegression(max_iter=1000, random_state=random_state),
+            model = Pipeline(
+                [
+                    ("scaler", StandardScaler()),
+                    (
+                        "classifier",
+                        LogisticRegression(max_iter=1000, random_state=random_state),
+                    ),
+                ]
             )
             model.fit(X_origin_train, y_origin_train)
             origin_models[origin] = model
@@ -137,7 +403,6 @@ with tab_stratified:
             )
 
     stats_df = pd.DataFrame(origin_stats)
-
     cols = st.columns(len(stats_df))
     for idx, row in stats_df.iterrows():
         cols[idx].metric(
@@ -147,47 +412,41 @@ with tab_stratified:
 st.divider()
 
 st.subheader("Performance Comparison")
-st.caption("Evaluating all three approaches on the held-out test set")
+st.caption("How well does each model predict on unseen test data?")
 
-# Predictions
-# 1. Global LR
-y_pred_lr = global_lr.predict(X_test)
-y_prob_lr = global_lr.predict_proba(X_test)[:, 1]
+y_pred_lr = global_lr.predict(X_test_imputed)
+y_prob_lr = global_lr.predict_proba(X_test_imputed)[:, 1]
 
-# 2. Global DT
-y_pred_dt = global_dt.predict(X_test)
-y_prob_dt = global_dt.predict_proba(X_test)[:, 1]
+y_pred_dt = global_dt.predict(X_test_imputed)
+y_prob_dt = global_dt.predict_proba(X_test_imputed)[:, 1]
 
-# 3. Stratified
 y_pred_stratified = []
 y_prob_stratified = []
 
-for idx in range(len(X_test)):
+for idx in range(len(X_test_imputed)):
     origin = origins_test.iloc[idx]
-    X_sample = X_test.iloc[[idx]]
+    X_sample = X_test_imputed.iloc[[idx]]
 
     if origin in origin_models:
         pred = origin_models[origin].predict(X_sample)[0]
         prob = origin_models[origin].predict_proba(X_sample)[0, 1]
     else:
-        # Fallback to global LR
         pred = global_lr.predict(X_sample)[0]
         prob = global_lr.predict_proba(X_sample)[0, 1]
 
     y_pred_stratified.append(pred)
     y_prob_stratified.append(prob)
 
-y_pred_stratified = pd.Series(y_pred_stratified, index=X_test.index)
-y_prob_stratified = pd.Series(y_prob_stratified, index=X_test.index)
+y_pred_stratified = pd.Series(y_pred_stratified, index=X_test_imputed.index)
+y_prob_stratified = pd.Series(y_prob_stratified, index=X_test_imputed.index)
 
 
-# Metrics Helper
 def get_metrics(y_true, y_pred):
     return {
         "Accuracy": accuracy_score(y_true, y_pred),
-        "Precision": precision_score(y_true, y_pred),
-        "Recall": recall_score(y_true, y_pred),
-        "F1 Score": f1_score(y_true, y_pred),
+        "Precision": precision_score(y_true, y_pred, zero_division=0),
+        "Recall": recall_score(y_true, y_pred, zero_division=0),
+        "F1 Score": f1_score(y_true, y_pred, zero_division=0),
     }
 
 
@@ -200,7 +459,7 @@ metrics_df = pd.DataFrame(
 ).T
 
 st.dataframe(
-    metrics_df.style.format("{:.3f}").highlight_max(axis=0, color="lightgreen"),
+    metrics_df.style.format("{:.3f}").highlight_max(axis=0, color="darkgreen"),
     use_container_width=True,
 )
 
@@ -208,7 +467,7 @@ st.divider()
 
 st.subheader("ROC Curves")
 st.caption(
-    "Receiver Operating Characteristic curves compare model discrimination ability"
+    "How well can each model distinguish between disease and no-disease? Higher AUC = better."
 )
 
 roc_data = []
@@ -249,20 +508,18 @@ st.altair_chart(roc_chart + diagonal, use_container_width=True)
 st.divider()
 
 st.subheader("Performance by Origin")
-st.caption("Breakdown of model accuracy across different data collection sites")
+st.caption("Does the model work equally well for all hospitals, or does it favor some?")
 
 origin_comparison = []
 
 for origin in sorted(origins_test.unique()):
     mask = origins_test == origin
     if mask.sum() > 0:
-        X_sub = X_test[mask]
+        X_sub = X_test_imputed[mask]
         y_sub = y_test[mask]
 
         acc_lr = accuracy_score(y_sub, global_lr.predict(X_sub))
         acc_dt = accuracy_score(y_sub, global_dt.predict(X_sub))
-
-        # Stratified predictions for this subset
         y_pred_strat_sub = y_pred_stratified[mask]
         acc_strat = accuracy_score(y_sub, y_pred_strat_sub)
 
@@ -289,29 +546,36 @@ chart = (
     alt.Chart(comp_long)
     .mark_bar()
     .encode(
-        x=alt.X("Model:N", title=None, axis=alt.Axis(labelAngle=-45)),
+        x=alt.X("Origin:N", title="Origin", axis=alt.Axis(labelAngle=0)),
         y=alt.Y("Accuracy:Q", title="Accuracy", scale=alt.Scale(domain=[0, 1])),
-        color=alt.Color("Model:N", scale=alt.Scale(scheme="category10")),
-        column=alt.Column("Origin:N", title=None, header=alt.Header(labelAngle=0)),
+        color=alt.Color(
+            "Model:N",
+            scale=alt.Scale(scheme="category10"),
+            legend=alt.Legend(title="Model"),
+        ),
+        xOffset="Model:N",
         tooltip=["Origin", "Model", "Samples", alt.Tooltip("Accuracy", format=".1%")],
     )
-    .properties(width=100, height=300)
+    .properties(height=400)
 )
 
 st.altair_chart(chart, use_container_width=True)
 
 st.divider()
 
-# ========== CROSS-VALIDATION ==========
 st.subheader("Cross-Validation Results")
 st.caption(
-    "5-fold stratified cross-validation provides more robust accuracy estimates than a single train/test split."
+    "Testing model stability by training on 5 different train/test splits. Low Std Dev = consistent model."
 )
 
 cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=random_state)
 
-cv_scores_lr = cross_val_score(global_lr, X, y, cv=cv, scoring="accuracy")
-cv_scores_dt = cross_val_score(global_dt, X, y, cv=cv, scoring="accuracy")
+cv_scores_lr = cross_val_score(
+    global_lr, X_train_imputed, y_train, cv=cv, scoring="accuracy"
+)
+cv_scores_dt = cross_val_score(
+    global_dt, X_train_imputed, y_train, cv=cv, scoring="accuracy"
+)
 
 cv_results = pd.DataFrame(
     {
@@ -333,73 +597,104 @@ st.dataframe(
         }
     ),
     use_container_width=True,
+    hide_index=True,
+    height=108,
 )
 
-# ========== CONFUSION MATRICES ==========
 st.divider()
 
 st.subheader("Confusion Matrices")
 st.caption(
-    "Visualize prediction errors: false positives (healthy predicted as sick) vs false negatives (sick predicted as healthy)."
+    "Where did each model make mistakes? Bottom-left (missed disease cases) is the most dangerous error."
 )
 
 
-def plot_confusion_matrix(y_true, y_pred, title):
+# Build confusion matrix data for all three models
+def get_cm_data(y_true, y_pred, model_name):
     cm = confusion_matrix(y_true, y_pred)
-    cm_df = pd.DataFrame(
-        cm, index=["No Disease", "Disease"], columns=["Pred: No", "Pred: Yes"]
-    )
+    return [
+        {
+            "Model": model_name,
+            "Actual": "No Disease",
+            "Predicted": "No",
+            "Count": int(cm[0, 0]),
+        },
+        {
+            "Model": model_name,
+            "Actual": "No Disease",
+            "Predicted": "Yes",
+            "Count": int(cm[0, 1]),
+        },
+        {
+            "Model": model_name,
+            "Actual": "Disease",
+            "Predicted": "No",
+            "Count": int(cm[1, 0]),
+        },
+        {
+            "Model": model_name,
+            "Actual": "Disease",
+            "Predicted": "Yes",
+            "Count": int(cm[1, 1]),
+        },
+    ]
 
-    cm_long = cm_df.reset_index().melt(
-        id_vars="index", var_name="Predicted", value_name="Count"
-    )
-    cm_long = cm_long.rename(columns={"index": "Actual"})
 
-    chart = (
-        alt.Chart(cm_long)
-        .mark_rect()
-        .encode(
-            x=alt.X("Predicted:N", title="Predicted"),
-            y=alt.Y("Actual:N", title="Actual"),
-            color=alt.Color("Count:Q", scale=alt.Scale(scheme="blues"), legend=None),
-            tooltip=["Actual", "Predicted", "Count"],
-        )
-        .properties(title=title, width=180, height=180)
-    )
+cm_data = (
+    get_cm_data(y_test, y_pred_lr, "Global Logistic")
+    + get_cm_data(y_test, y_pred_dt, "Decision Tree")
+    + get_cm_data(y_test, np.array(y_pred_stratified), "Origin-Stratified")
+)
+cm_df = pd.DataFrame(cm_data)
 
-    text = chart.mark_text(baseline="middle", fontSize=18, fontWeight="bold").encode(
+cm_chart = (
+    alt.Chart(cm_df)
+    .mark_rect()
+    .encode(
+        x=alt.X("Predicted:N", title="Predicted", sort=["No", "Yes"]),
+        y=alt.Y("Actual:N", title="Actual", sort=["No Disease", "Disease"]),
+        color=alt.Color("Count:Q", scale=alt.Scale(scheme="blues"), legend=None),
+        tooltip=["Model", "Actual", "Predicted", "Count"],
+    )
+)
+
+cm_text = (
+    alt.Chart(cm_df)
+    .mark_text(fontSize=16, fontWeight="bold")
+    .encode(
+        x=alt.X("Predicted:N", sort=["No", "Yes"]),
+        y=alt.Y("Actual:N", sort=["No Disease", "Disease"]),
         text="Count:Q",
         color=alt.condition(
-            alt.datum.Count > cm.max() / 2, alt.value("white"), alt.value("black")
+            alt.datum.Count > 30, alt.value("white"), alt.value("black")
         ),
     )
+)
 
-    return chart + text
-
-
-col_cm1, col_cm2, col_cm3 = st.columns(3)
-with col_cm1:
-    st.altair_chart(
-        plot_confusion_matrix(y_test, y_pred_lr, "Global Logistic"),
-        use_container_width=True,
+cm_combined = (
+    (cm_chart + cm_text)
+    .properties(
+        width=150,
+        height=150,
     )
-with col_cm2:
-    st.altair_chart(
-        plot_confusion_matrix(y_test, y_pred_dt, "Global Decision Tree"),
-        use_container_width=True,
+    .facet(
+        column=alt.Column(
+            "Model:N",
+            title=None,
+            sort=["Global Logistic", "Decision Tree", "Origin-Stratified"],
+        )
     )
-with col_cm3:
-    st.altair_chart(
-        plot_confusion_matrix(y_test, y_pred_stratified, "Origin-Stratified"),
-        use_container_width=True,
-    )
+)
 
-# ========== FEATURE IMPORTANCE ==========
+st.altair_chart(cm_combined, use_container_width=True)
+
 st.divider()
 
 st.subheader("Feature Importance")
+
+st.markdown("**Decision Tree Feature Importance**")
 st.caption(
-    "Which features matter most for predicting heart disease? Decision Tree importance shows feature contribution."
+    "Which features did the tree use most to make splits? Taller bars = more important for predictions."
 )
 
 dt_importance = pd.DataFrame(
@@ -415,148 +710,144 @@ importance_chart = (
         color=alt.Color("Importance:Q", scale=alt.Scale(scheme="blues"), legend=None),
         tooltip=["Feature", alt.Tooltip("Importance:Q", format=".3f")],
     )
-    .properties(height=400, title="Decision Tree Feature Importance")
+    .properties(height=400)
 )
 
 st.altair_chart(importance_chart, use_container_width=True)
 
-# Also show Logistic Regression coefficients
+st.markdown("**Logistic Regression Feature Influence**")
 st.caption(
-    "Logistic Regression coefficients (absolute values) indicate feature influence on prediction."
+    "Taller bars = feature has more impact on the prediction. "
+    "These show how strongly each feature affects the model's decision."
 )
 
-lr_model = global_lr.named_steps["logisticregression"]
+lr_model = global_lr.named_steps["classifier"]
 lr_coefs = pd.DataFrame(
-    {"Feature": available_features, "Coefficient": np.abs(lr_model.coef_[0])}
-).sort_values("Coefficient", ascending=False)
+    {"Feature": available_features, "Influence": np.abs(lr_model.coef_[0])}
+).sort_values("Influence", ascending=False)
 
 coef_chart = (
     alt.Chart(lr_coefs)
     .mark_bar()
     .encode(
-        x=alt.X("Coefficient:Q", title="|Coefficient|"),
+        x=alt.X("Influence:Q", title="Influence Strength"),
         y=alt.Y("Feature:N", sort="-x", title="Feature"),
-        color=alt.Color(
-            "Coefficient:Q", scale=alt.Scale(scheme="oranges"), legend=None
-        ),
-        tooltip=["Feature", alt.Tooltip("Coefficient:Q", format=".3f")],
+        color=alt.Color("Influence:Q", scale=alt.Scale(scheme="oranges"), legend=None),
+        tooltip=["Feature", alt.Tooltip("Influence:Q", format=".3f")],
     )
-    .properties(height=400, title="Logistic Regression |Coefficients|")
+    .properties(height=400)
 )
 
 st.altair_chart(coef_chart, use_container_width=True)
 
-# ========== STATISTICAL COMPARISON ==========
 st.divider()
 
-st.subheader("Statistical Comparison")
-st.caption("Direct performance metrics comparing the three modeling approaches")
+st.subheader("Model Comparison Summary")
+st.caption("Which model performed best overall?")
 
 acc_global_lr = metrics_df.loc["Global Logistic", "Accuracy"]
 acc_global_dt = metrics_df.loc["Global Decision Tree", "Accuracy"]
 acc_stratified = metrics_df.loc["Origin-Stratified", "Accuracy"]
 
-col_stat1, col_stat2, col_stat3 = st.columns(3)
+# Create a simple comparison table
+comparison_data = pd.DataFrame(
+    {
+        "Model": [
+            "Global Logistic Regression",
+            "Global Decision Tree",
+            "Origin-Stratified",
+        ],
+        "Accuracy": [acc_global_lr, acc_global_dt, acc_stratified],
+    }
+).sort_values("Accuracy", ascending=False)
 
-with col_stat1:
-    diff_strat_vs_lr = acc_stratified - acc_global_lr
-    st.metric(
-        "Stratified vs Global LR",
-        f"{acc_stratified:.1%}",
-        delta=f"{diff_strat_vs_lr:+.1%}",
-        delta_color="normal" if diff_strat_vs_lr > 0 else "inverse",
-    )
+comparison_data["Rank"] = ["Best", "Second", "Third"][: len(comparison_data)]
+comparison_data = comparison_data[["Rank", "Model", "Accuracy"]]
 
-with col_stat2:
-    diff_dt_vs_lr = acc_global_dt - acc_global_lr
-    st.metric(
-        "Decision Tree vs Global LR",
-        f"{acc_global_dt:.1%}",
-        delta=f"{diff_dt_vs_lr:+.1%}",
-        delta_color="normal" if diff_dt_vs_lr > 0 else "inverse",
-    )
-
-with col_stat3:
-    best_acc = max(acc_global_lr, acc_global_dt, acc_stratified)
-    st.metric(
-        "Best Model Accuracy",
-        f"{best_acc:.1%}",
-        delta=f"{best_acc - acc_global_lr:+.1%} vs baseline",
-    )
+st.dataframe(
+    comparison_data.style.format({"Accuracy": "{:.1%}"}).hide(axis="index"),
+    use_container_width=True,
+    hide_index=True,
+)
 
 st.divider()
 
-# Conclusion Logic
 best_model = metrics_df["Accuracy"].idxmax()
 acc_diff = acc_stratified - acc_global_lr
 
-st.success(f"### 🏆 Best Performing Approach: {best_model}")
+st.success(f"### :material/workspace_premium: Best Performing Approach: {best_model}")
 
-# More nuanced interpretation based on actual results
-if abs(acc_diff) < 0.03:  # Less than 3% difference
-    st.markdown("""
-    **Key Finding:** The stratified and global models perform **nearly identically**.
+# Check Switzerland performance for insights
+switzerland_insight = ""
+for row in origin_comparison:
+    if row["Origin"] == "Switzerland":
+        swiss_strat = row.get("Stratified", 0)
+        swiss_global = row.get("Global LR", 0)
+        if swiss_strat > swiss_global + 0.1:  # >10% better
+            switzerland_insight = f"""
     
-    This tells us something important about the "One Size Fits All" hypothesis:
+    **Notable:** Switzerland shows a large improvement with the stratified model 
+    ({swiss_strat:.0%} vs {swiss_global:.0%}), suggesting its patient population 
+    may have different characteristics than other hospitals.
+    """
+
+if abs(acc_diff) < 0.03:
+    st.markdown(f"""
+    **Key Finding:** The stratified and global models perform **similarly overall**.
     
-    - **The institutional differences were primarily in data collection, not in disease patterns.**
-    - Features like `ca`, `thal`, `slope`, `fbs`, and `chol` varied dramatically across hospitals because different institutions ran different tests.
-    - Once we removed these unreliable features, the remaining 8 core features (`age`, `sex`, `cp`, `trestbps`, `restecg`, `thalach`, `exang`, `oldpeak`) are **consistent enough across institutions** that a single global model works.
-    
-    **Clinical Implication:** A simpler global model may be sufficient for deployment, but only if we restrict to features that are reliably collected across all institutions. The "one size fits all" debate is really about **data quality and standardization**, not model architecture.
+    - Institutional differences were primarily in **data collection quality**, not disease patterns
+    - We dropped {len(unreliable_features)} features with >{missing_threshold:.0%} missing data
+    - The remaining {len(available_features)} features work consistently across hospitals
+    {switzerland_insight}
     """)
 elif best_model == "Origin-Stratified":
-    st.markdown("""
-    **Interpretation:** The Stratified approach performed best. This confirms that **institutional differences** 
-    remain important even after feature selection. Local calibration provides measurable benefit.
+    st.markdown(f"""
+    **Key Finding:** Hospital-specific models work better than a single global model.
+    
+    - This suggests real differences in patient populations across institutions
+    - Each hospital may have different risk factors or diagnostic patterns
+    {switzerland_insight}
     """)
 elif best_model == "Global Decision Tree":
-    st.markdown("""
-    **Interpretation:** The Decision Tree model performed best. This suggests that **non-linear relationships** 
-    in the data are more important than institutional differences. A flexible global model can capture 
-    the patterns across all populations.
+    st.markdown(f"""
+    **Key Finding:** The Decision Tree outperformed other approaches.
+    
+    - This suggests **non-linear patterns** in the data (e.g., interactions between features)
+    - A tree can capture rules like "if chest pain = asymptomatic AND age > 55 → high risk"
+    {switzerland_insight}
     """)
 else:
-    st.markdown("""
-    **Interpretation:** The simple Global Logistic Regression performed well. 
-    The core features are robust enough across institutions for a simple linear model to generalize.
-    """)
-
-# Add a summary of what was learned
-st.divider()
-st.subheader("Key Takeaways")
-
-col_s1, col_s2 = st.columns(2)
-
-with col_s1:
-    st.markdown("""
-    **❌ Features Dropped (Unreliable):**
-    - `ca` - 99% missing in 3/4 datasets
-    - `thal` - 83-90% missing in 3/4 datasets
-    - `slope` - 51-65% missing in 3/4 datasets
-    - `fbs` - 61% missing in Switzerland
-    - `chol` - All zeros in Switzerland
-    
-    These features drove the "institutional differences" narrative but were really just data quality issues.
-    """)
-
-with col_s2:
     st.markdown(f"""
-    **✅ Features Kept (Reliable):**
-    - `age`, `sex`, `cp`, `trestbps`
-    - `restecg`, `thalach`, `exang`, `oldpeak`
+    **Key Finding:** A simple Logistic Regression works well across all hospitals.
     
-    With these 8 features, all three modeling approaches achieve ~{acc_global_lr:.0%} accuracy, 
-    suggesting the core clinical indicators are consistent across institutions.
+    - The core clinical features (chest pain, max heart rate, ST depression) are universal
+    - No need for complex models or hospital-specific approaches
+    {switzerland_insight}
     """)
 
 st.divider()
+
+with st.expander(":material/checklist: Pipeline Summary", expanded=False):
+    imputation_detail = (
+        f"KNN (k={n_neighbors})"
+        if imputation_method == "KNN"
+        else f"MICE (max_iter={mice_max_iter})"
+    )
+    st.markdown(f"""
+    **Data Preprocessing Pipeline (No Leakage):**
+    
+    1. **Load raw data** - No pre-imputation
+    2. **Dynamic feature selection** - Dropped features with >{missing_threshold:.0%} missing
+    3. **Train/test split FIRST** - {1 - test_size:.0%}/{test_size:.0%} split
+    4. **Origin-aware {imputation_method} imputation** - Fitted on training only
+    5. **Model training** - StandardScaler + Classifiers
+    6. **Evaluation** - On held-out test set
+    
+    **Imputation:** {imputation_detail} per-origin
+    """)
+
 st.info(
-    """
-    **Why this matters:** The "One Size Fits All" debate in healthcare ML often assumes institutional 
-    differences reflect genuine population variation. Our analysis shows that after controlling for 
-    data quality, a single global model can generalize effectively—but only when using features 
-    consistently collected across all sites.
-    """,
+    "**Why this matters:** We split the data before imputing missing values, so the test set stays truly 'unseen'. "
+    "Each hospital's missing values are filled using only that hospital's patterns.",
     icon=":material/info:",
 )

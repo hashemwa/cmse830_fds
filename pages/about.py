@@ -72,10 +72,10 @@ with st.expander("Methodology", icon=":material/science:"):
     st.markdown("""
     ### Data Processing Pipeline
     
-    **1. Missing Value Imputation**
-    - KNN imputation (k=5) applied to all features
-    - Preserves relationships between variables
-    - More sophisticated than simple median/mode imputation
+    **1. Missing Value Handling**
+    - Features with >50% missing in any origin are **excluded** (ca, thal, slope, fbs, chol)
+    - Remaining features imputed using KNN or MICE per-origin
+    - Note: High missingness cannot be reliably recovered by any method
     
     **2. Data Normalization**
     - Thalassemia codes normalized to `{3, 6, 7}`

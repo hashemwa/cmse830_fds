@@ -51,6 +51,17 @@ df_hungary["target"] = (df_hungary["num"] > 0).astype(int)
 df_switzerland["target"] = (df_switzerland["num"] > 0).astype(int)
 df_long_beach_va["target"] = (df_long_beach_va["num"] > 0).astype(int)
 
+# Convert "fake zeros" to NaN - these are features where 0 is clinically impossible
+# These represent missing data encoded as zeros, not actual measurements
+
+# Switzerland: chol = 0 for ALL 123 patients (no cholesterol measurements taken)
+df_switzerland.loc[df_switzerland["chol"] == 0, "chol"] = np.nan
+
+# Long Beach VA: chol = 0 for 49 patients, trestbps = 0 for 1 patient
+# (cholesterol and blood pressure cannot be zero in living patients)
+df_long_beach_va.loc[df_long_beach_va["chol"] == 0, "chol"] = np.nan
+df_long_beach_va.loc[df_long_beach_va["trestbps"] == 0, "trestbps"] = np.nan
+
 print(df_cleveland.info())
 print(df_hungary.info())
 print(df_long_beach_va.info())
@@ -99,47 +110,18 @@ plt.ylabel("Column")
 plt.show()
 
 
-def simple_impute(df):
-    df2 = df.copy()
-
-    num_cols = df2.select_dtypes(include=[np.number]).columns
-    cat_cols = df2.select_dtypes(exclude=[np.number]).columns
-
-    if len(num_cols) > 0:
-        num_imp = SimpleImputer(strategy="mean")
-        df2[num_cols] = num_imp.fit_transform(df2[num_cols])
-
-    if len(cat_cols) > 0:
-        cat_imp = SimpleImputer(strategy="most_frequent")
-        df2[cat_cols] = cat_imp.fit_transform(df2[cat_cols])
-
-    return df2
-
-
-df_cleveland_simple = simple_impute(df_cleveland)
-df_hungary_simple = simple_impute(df_hungary)
-df_switzerland_simple = simple_impute(df_switzerland)
-df_long_beach_va_simple = simple_impute(df_long_beach_va)
-
-df_combined_simple = pd.concat(
-    [
-        df_cleveland_simple,
-        df_hungary_simple,
-        df_switzerland_simple,
-        df_long_beach_va_simple,
-    ]
-)
-
-
 def knn_impute(df, n_neighbors=5):
     df2 = df.copy()
 
     num_cols = df2.select_dtypes(include=[np.number]).columns
     cat_cols = df2.select_dtypes(exclude=[np.number]).columns
 
-    if len(num_cols) > 0:
+    # Exclude columns that are entirely NaN (can't be imputed)
+    num_cols_valid = [c for c in num_cols if df2[c].notna().any()]
+
+    if len(num_cols_valid) > 0:
         knn = KNNImputer(n_neighbors=n_neighbors, weights="uniform")
-        df2[num_cols] = knn.fit_transform(df2[num_cols])
+        df2[num_cols_valid] = knn.fit_transform(df2[num_cols_valid])
 
     if len(cat_cols) > 0:
         cat_imp = SimpleImputer(strategy="most_frequent")
@@ -154,9 +136,12 @@ def mice_impute(df, max_iter=10, random_state=0):
     num_cols = df2.select_dtypes(include=[np.number]).columns
     cat_cols = df2.select_dtypes(exclude=[np.number]).columns
 
-    if len(num_cols) > 0:
+    # Exclude columns that are entirely NaN (can't be imputed)
+    num_cols_valid = [c for c in num_cols if df2[c].notna().any()]
+
+    if len(num_cols_valid) > 0:
         mice = IterativeImputer(max_iter=max_iter, random_state=random_state)
-        df2[num_cols] = mice.fit_transform(df2[num_cols])
+        df2[num_cols_valid] = mice.fit_transform(df2[num_cols_valid])
 
     if len(cat_cols) > 0:
         cat_imp = SimpleImputer(strategy="most_frequent")
@@ -221,13 +206,6 @@ plt.figure(figsize=(12, 7))
 
 sns.kdeplot(
     df_combined["trestbps"].dropna(), label="Original Data", color="blue", linewidth=2
-)
-
-sns.kdeplot(
-    df_combined_simple["trestbps"],
-    label="Simple Imputation (Mean)",
-    color="red",
-    linestyle="--",
 )
 
 sns.kdeplot(
@@ -334,15 +312,6 @@ def get_individual_raw_datasets():
     }
 
 
-def get_individual_simple_imputed():
-    return {
-        "Cleveland": df_cleveland_simple.copy(),
-        "Hungary": df_hungary_simple.copy(),
-        "Long Beach VA": df_long_beach_va_simple.copy(),
-        "Switzerland": df_switzerland_simple.copy(),
-    }
-
-
 def get_individual_knn_imputed():
     return {
         "Cleveland": df_cleveland_knn.copy(),
@@ -359,10 +328,6 @@ def get_individual_mice_imputed():
         "Long Beach VA": df_long_beach_va_mice.copy(),
         "Switzerland": df_switzerland_mice.copy(),
     }
-
-
-def get_combined_simple_imputed():
-    return df_combined_simple.copy()
 
 
 def get_combined_knn_imputed():

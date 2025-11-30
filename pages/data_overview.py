@@ -10,11 +10,9 @@ st.title("Data Overview")
 st.markdown("*Exploring Individual Datasets Before Combination*")
 
 st.warning(
-    "**Data Quality Note:** Some features show uniform zero values across entire origins in the original UCI repository data: "
-    "`ca` (number of vessels) = 0 for all Hungary and Long Beach VA patients, and `chol` (cholesterol) = 0 for all Switzerland patients. "
-    "These are likely due to technical limitations, different testing procedures, or data recording practices at those institutions. "
-    "We preserved these values to maintain data authenticity, but note that they affect feature correlations and distributions "
-    "for those specific origins.",
+    "**Data Quality Note:** Some hospitals recorded missing values as zeros instead of leaving them blank. "
+    "For example, `chol` (cholesterol) = 0 for all Switzerland patients, and some Long Beach VA patients have `chol` = 0 or `trestbps` = 0. "
+    "Since these values are clinically impossible, they are treated as missing data and converted to NaN before analysis.",
     icon=":material/warning:",
 )
 

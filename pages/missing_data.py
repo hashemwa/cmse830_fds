@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
-from analysis import missingness_heatmap
+import altair as alt
+from analysis import missingness_heatmap, get_individual_raw_datasets
 
 df_raw_filtered = st.session_state.df_raw_filtered
 
@@ -87,6 +88,160 @@ if df_raw_filtered.isnull().values.any():
         "That's why a 'one size fits all' model trained on mixed data will fail when used at any single hospital.",
         icon=":material/info:",
     )
+
+    st.divider()
+
+    # ========== TRUE MISSING RATES (including hidden zeros) ==========
+    st.subheader("True Missing Rates")
+    st.markdown("*Detecting hidden missing values encoded as zeros*")
+
+    st.warning(
+        "**Important:** Some hospitals recorded missing values as `0` instead of leaving them blank. "
+        "For clinical features like cholesterol and blood pressure, a value of 0 is **impossible** in living patients. "
+        "These 'fake zeros' must be treated as missing data.",
+        icon=":material/warning:",
+    )
+
+    # Features where 0 is clinically impossible
+    fake_zero_features = {
+        "chol": "Serum cholesterol cannot be 0 mg/dL",
+        "trestbps": "Resting blood pressure cannot be 0 mmHg",
+        "thalach": "Maximum heart rate cannot be 0 bpm",
+        "age": "Age cannot be 0 years",
+    }
+
+    # Calculate true missing rates
+    raw_datasets = get_individual_raw_datasets()
+
+    true_missing_data = []
+    for origin, df_origin in raw_datasets.items():
+        for col in [
+            "age",
+            "sex",
+            "cp",
+            "trestbps",
+            "chol",
+            "fbs",
+            "restecg",
+            "thalach",
+            "exang",
+            "oldpeak",
+            "slope",
+            "ca",
+            "thal",
+        ]:
+            if col not in df_origin.columns:
+                continue
+
+            explicit_nan = df_origin[col].isnull().sum()
+
+            # Check for fake zeros only in continuous features where 0 is impossible
+            fake_zeros = 0
+            if col in fake_zero_features:
+                fake_zeros = (df_origin[col] == 0).sum()
+
+            total_missing = explicit_nan + fake_zeros
+            pct = total_missing / len(df_origin) * 100
+
+            true_missing_data.append(
+                {
+                    "Origin": origin,
+                    "Feature": col,
+                    "Explicit NaN": explicit_nan,
+                    "Fake Zeros": fake_zeros,
+                    "Total Missing": total_missing,
+                    "Missing %": pct,
+                }
+            )
+
+    true_missing_df = pd.DataFrame(true_missing_data)
+
+    # Pivot table showing missing % by origin
+    pivot_df = true_missing_df.pivot(
+        index="Feature", columns="Origin", values="Missing %"
+    ).round(1)
+    pivot_df = pivot_df[["Cleveland", "Hungary", "Long Beach VA", "Switzerland"]]
+
+    st.markdown("**True Missing Rates by Feature and Origin (%)**")
+    st.caption(
+        "Includes both explicit NaN values and 'fake zeros' that represent missing data"
+    )
+
+    # Create Altair heatmap (similar to missingness_heatmap)
+    heatmap_data = pivot_df.reset_index().melt(
+        id_vars="Feature", var_name="Origin", value_name="Missing %"
+    )
+
+    heatmap = (
+        alt.Chart(heatmap_data)
+        .mark_rect()
+        .encode(
+            x=alt.X("Origin:N", title="Origin", axis=alt.Axis(labelAngle=0)),
+            y=alt.Y("Feature:N", title="Feature", sort=list(pivot_df.index)),
+            color=alt.Color(
+                "Missing %:Q",
+                scale=alt.Scale(scheme="viridis", domain=[0, 100]),
+                legend=alt.Legend(title="% Missing"),
+            ),
+            tooltip=[
+                alt.Tooltip("Origin:N", title="Origin"),
+                alt.Tooltip("Feature:N", title="Feature"),
+                alt.Tooltip("Missing %:Q", title="True Missing %", format=".1f"),
+            ],
+        )
+        .properties(height=450)
+    )
+
+    text = (
+        alt.Chart(heatmap_data)
+        .mark_text(baseline="middle")
+        .encode(
+            x=alt.X("Origin:N"),
+            y=alt.Y("Feature:N", sort=list(pivot_df.index)),
+            text=alt.Text("Missing %:Q", format=".1f"),
+            color=alt.condition(
+                alt.datum["Missing %"] > 50,
+                alt.value("black"),
+                alt.value("#f7f7f7"),
+            ),
+        )
+    )
+
+    st.altair_chart(heatmap + text, use_container_width=True)
+
+    st.divider()
+
+    # Feature reliability summary - improved UI
+    st.subheader("Feature Reliability for Modeling")
+    st.caption("Based on maximum missing rate across all origins (threshold: 50%)")
+
+    max_missing = pivot_df.max(axis=1).sort_values(ascending=False)
+
+    unreliable = max_missing[max_missing > 50]
+    reliable = max_missing[max_missing <= 50]
+
+    col_drop, col_keep = st.columns(2)
+
+    with col_drop:
+        st.error(f"**Features to Drop** ({len(unreliable)})", icon=":material/cancel:")
+        if len(unreliable) > 0:
+            for feat, rate in unreliable.items():
+                worst_origin = pivot_df.loc[feat].idxmax()
+                st.markdown(f"- `{feat}` — {rate:.0f}% in {worst_origin}")
+        else:
+            st.markdown("*None*")
+
+    with col_keep:
+        st.success(
+            f"**Features to Keep** ({len(reliable)})", icon=":material/check_circle:"
+        )
+        for feat, rate in reliable.items():
+            if rate > 0:
+                worst_origin = pivot_df.loc[feat].idxmax()
+                st.markdown(f"- `{feat}` — {rate:.0f}% max ({worst_origin})")
+            else:
+                st.markdown(f"- `{feat}` — Complete")
+
 else:
     st.success(
         "No missing values in the filtered raw data!", icon=":material/check_circle:"

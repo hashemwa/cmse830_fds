@@ -5,7 +5,6 @@ import altair as alt
 from scipy.stats import gaussian_kde
 from analysis import (
     get_individual_raw_datasets,
-    get_individual_simple_imputed,
     get_individual_knn_imputed,
     get_individual_mice_imputed,
     get_combined_knn_imputed,
@@ -21,7 +20,7 @@ age_range = st.session_state.age_range
 
 
 st.title("Imputation")
-st.markdown("*Comparing Simple, KNN, and MICE Imputation Methods*")
+st.markdown("*Comparing KNN and MICE Imputation Methods*")
 
 st.warning(
     "**Methodology:** Each dataset was imputed **independently** to avoid data leakage across origins. "
@@ -29,8 +28,15 @@ st.warning(
     icon=":material/science:",
 )
 
+st.error(
+    "**Important Limitation:** Some features have 60-100% missing values in certain origins "
+    "(e.g., `chol` in Switzerland, `ca` and `thal` in Hungary). No imputation method can reliably recover "
+    "data that was never collected. These features are **excluded from modeling**. Imputation is only applied "
+    "to features with moderate missingness where patterns can be reasonably estimated.",
+    icon=":material/warning:",
+)
+
 raw_datasets = get_individual_raw_datasets()
-simple_datasets = get_individual_simple_imputed()
 knn_datasets = get_individual_knn_imputed()
 mice_datasets = get_individual_mice_imputed()
 
@@ -42,11 +48,10 @@ tabs = st.tabs(["Cleveland", "Hungary", "Long Beach VA", "Switzerland"])
 for idx, (dataset_name, tab) in enumerate(zip(raw_datasets.keys(), tabs)):
     with tab:
         raw_data = raw_datasets[dataset_name]
-        simple_data = simple_datasets[dataset_name]
         knn_data = knn_datasets[dataset_name]
         mice_data = mice_datasets[dataset_name]
 
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3 = st.columns(3)
 
         with col1:
             st.markdown("**Original**")
@@ -54,14 +59,6 @@ for idx, (dataset_name, tab) in enumerate(zip(raw_datasets.keys(), tabs)):
             st.metric("Missing Values", missing_count)
 
         with col2:
-            st.markdown("**Simple**")
-            missing_simple = simple_data.isnull().sum().sum()
-            st.metric(
-                "Missing Values",
-                missing_simple,
-            )
-
-        with col3:
             st.markdown("**KNN**")
             missing_knn = knn_data.isnull().sum().sum()
             st.metric(
@@ -69,7 +66,7 @@ for idx, (dataset_name, tab) in enumerate(zip(raw_datasets.keys(), tabs)):
                 missing_knn,
             )
 
-        with col4:
+        with col3:
             st.markdown("**MICE**")
             missing_mice = mice_data.isnull().sum().sum()
             st.metric(
@@ -85,20 +82,17 @@ for idx, (dataset_name, tab) in enumerate(zip(raw_datasets.keys(), tabs)):
 
         if "trestbps" in raw_data.columns:
             original_vals = raw_data["trestbps"].dropna().values
-            simple_vals = simple_data["trestbps"].dropna().values
             knn_vals = knn_data["trestbps"].dropna().values
             mice_vals = mice_data["trestbps"].dropna().values
 
             if len(original_vals) > 1 and original_vals.std() > 0:
                 x_min = min(
                     original_vals.min(),
-                    simple_vals.min(),
                     knn_vals.min(),
                     mice_vals.min(),
                 )
                 x_max = max(
                     original_vals.max(),
-                    simple_vals.max(),
                     knn_vals.max(),
                     mice_vals.max(),
                 )
@@ -106,25 +100,20 @@ for idx, (dataset_name, tab) in enumerate(zip(raw_datasets.keys(), tabs)):
 
                 try:
                     kde_orig = gaussian_kde(original_vals, bw_method="scott")
-                    kde_simple = gaussian_kde(simple_vals, bw_method="scott")
                     kde_knn = gaussian_kde(knn_vals, bw_method="scott")
                     kde_mice = gaussian_kde(mice_vals, bw_method="scott")
 
                     y_orig = kde_orig(x_smooth)
-                    y_simple = kde_simple(x_smooth)
                     y_knn = kde_knn(x_smooth)
                     y_mice = kde_mice(x_smooth)
 
                     chart_df = pd.DataFrame(
                         {
-                            "trestbps (mmHg)": np.tile(x_smooth, 4),
-                            "Density": np.concatenate(
-                                [y_orig, y_simple, y_knn, y_mice]
-                            ),
+                            "trestbps (mmHg)": np.tile(x_smooth, 3),
+                            "Density": np.concatenate([y_orig, y_knn, y_mice]),
                             "Method": np.repeat(
                                 [
                                     "Original",
-                                    "Simple Imputation",
                                     "KNN Imputation",
                                     "MICE Imputation",
                                 ],
@@ -159,11 +148,10 @@ for idx, (dataset_name, tab) in enumerate(zip(raw_datasets.keys(), tabs)):
                                 scale=alt.Scale(
                                     domain=[
                                         "Original",
-                                        "Simple Imputation",
                                         "KNN Imputation",
                                         "MICE Imputation",
                                     ],
-                                    range=["#4c78a8", "#f58518", "#54a24b", "#e45756"],
+                                    range=["#4c78a8", "#54a24b", "#e45756"],
                                 ),
                                 legend=alt.Legend(title="Method", orient="right"),
                             ),
@@ -201,7 +189,8 @@ for idx, (dataset_name, tab) in enumerate(zip(raw_datasets.keys(), tabs)):
 
                     st.altair_chart(chart, use_container_width=True)
                     st.caption(
-                        "KNN and MICE imputation preserve the original distribution shape better than simple mean imputation."
+                        "Note: Higher missingness leads to greater distribution shift. "
+                        "Long Beach VA (~28% missing) shows more distortion than Cleveland (~0% missing)."
                     )
                 except Exception:
                     st.warning(
@@ -248,20 +237,19 @@ available_cat = [c for c in cat_cols if c in combined_imputed.columns]
 
 with st.expander("Imputation Methods Explained", icon=":material/info:"):
     st.markdown("""
-    **Simple Imputation** (mean/mode):
-    - Replaces missing values with the overall mean (numerical) or mode (categorical)
-    - Fast and straightforward
-    - :material/cancel: Reduces variance and ignores relationships between features
-    
     **KNN Imputation** (k=5):
     - Uses the 5 most similar patients to estimate missing values
-    - Preserves local structure and feature relationships
-    - :material/check_circle: Better maintains the original data distribution
+    - Works well when missingness is low (<20%)
+    - Higher missingness leads to greater distribution distortion
+    - Assumes data is Missing At Random (MAR)
     
     **MICE (Multivariate Imputation by Chained Equations)**:
     - Models each feature with missing values as a function of other features
     - Iteratively estimates missing values
-    - :material/check_circle: Very robust, accounts for uncertainty, and handles complex relationships
+    - More robust for complex relationships, but still limited by data availability
+    - Also assumes data is Missing At Random (MAR)
+    
+    **Neither method can recover data that was never collected.**
     """)
 
 st.markdown(f"**Summary Statistics Comparison: Raw vs {imputation_method}**")
@@ -277,6 +265,8 @@ with feature_tabs[0]:
             st.dataframe(
                 combined_raw[available_num].describe().round(2),
                 use_container_width=True,
+                hide_index=False,
+                height=320,
             )
         else:
             st.info("No numerical features available")
@@ -287,6 +277,8 @@ with feature_tabs[0]:
             st.dataframe(
                 combined_imputed[available_num].describe().round(2),
                 use_container_width=True,
+                hide_index=False,
+                height=320,
             )
         else:
             st.info("No numerical features available")
@@ -309,7 +301,7 @@ with feature_tabs[1]:
                     }
                 )
             cat_summary = pd.DataFrame(cat_stats, index=available_cat).T
-            st.dataframe(cat_summary, use_container_width=True)
+            st.dataframe(cat_summary, use_container_width=True, height=180)
         else:
             st.info("No categorical features available")
 
@@ -328,16 +320,15 @@ with feature_tabs[1]:
                     }
                 )
             cat_summary = pd.DataFrame(cat_stats, index=available_cat).T
-            st.dataframe(cat_summary, use_container_width=True)
+            st.dataframe(cat_summary, use_container_width=True, height=180)
         else:
             st.info("No categorical features available")
 
 st.divider()
 
 st.info(
-    "**Why this matters:** How we fill in missing values directly affects everything we learn from the data. "
-    "KNN and MICE imputation preserve the relationships between features and create realistic values based on similar patients. "
-    "Simple mean/mode imputation would make all patients look more similar than they really are, "
-    "which could mislead any predictions or conclusions we make from this data.",
+    "**Why this matters:** Imputation works best for features with low to moderate missingness, "
+    "where there's enough data to estimate patterns. For features with extreme missingness (>50%), "
+    "no method can reliably recover what was never measured, so those features are excluded from modeling entirely.",
     icon=":material/info:",
 )
