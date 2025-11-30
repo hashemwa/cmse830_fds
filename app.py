@@ -48,6 +48,10 @@ modeling_page = st.Page(
     "pages/modeling.py", title="Model Development", icon=":material/model_training:"
 )
 
+thesis_page = st.Page(
+    "pages/thesis_validation.py", title="Thesis Validation", icon=":material/science:"
+)
+
 export_page = st.Page(
     "pages/data_export.py", title="Download", icon=":material/download:"
 )
@@ -63,7 +67,7 @@ pg = st.navigation(
             eda_categoricals,
             eda_prevalence,
         ],
-        "Modeling": [modeling_page],
+        "Modeling": [modeling_page, thesis_page],
         "Data Export": [export_page],
     },
     position="top",
@@ -93,40 +97,53 @@ if "origin" in df.columns:
     df["origin"] = pd.Categorical(df["origin"], categories=origin_order, ordered=True)
     st.session_state.origin_order = origin_order
 
-with st.sidebar:
-    st.markdown("### :material/tune: **Filters**")
-    st.markdown("*Customize your view of the data*")
-    st.divider()
+# Pages that don't use the global filters (they have their own config)
+pages_without_filters = ["Model Development", "Thesis Validation"]
+current_page = pg.title if hasattr(pg, "title") else ""
+show_filters = current_page not in pages_without_filters
 
-    st.markdown("#### :material/location_on: Data Origin")
-    st.caption("Select institutions to include")
+if show_filters:
+    with st.sidebar:
+        st.markdown("### :material/tune: **Filters**")
+        st.markdown("*Customize your view of the data*")
+        st.divider()
 
+        st.markdown("#### :material/location_on: Data Origin")
+        st.caption("Select institutions to include")
+
+        origin_opts = (
+            sorted(df["origin"].dropna().unique()) if "origin" in df.columns else []
+        )
+        origin_sel = []
+
+        if origin_opts:
+            for origin in origin_opts:
+                if st.checkbox(origin, value=True, key=f"origin_{origin}"):
+                    origin_sel.append(origin)
+
+        st.divider()
+
+        st.markdown("#### :material/calendar_today: Age Range")
+        st.caption("Filter patients by age")
+
+        if "age" in df.columns and df["age"].notna().any():
+            a_min, a_max = int(np.nanmin(df["age"])), int(np.nanmax(df["age"]))
+            age_range = st.slider(
+                "", a_min, a_max, (a_min, a_max), label_visibility="collapsed"
+            )
+
+            col1, col2 = st.columns(2)
+            col1.metric("Min Age", age_range[0], delta=None)
+            col2.metric("Max Age", age_range[1], delta=None)
+        else:
+            age_range = None
+else:
+    # For modeling pages, use all data (no filters)
     origin_opts = (
         sorted(df["origin"].dropna().unique()) if "origin" in df.columns else []
     )
-    origin_sel = []
-
-    if origin_opts:
-        for origin in origin_opts:
-            if st.checkbox(origin, value=True, key=f"origin_{origin}"):
-                origin_sel.append(origin)
-
-    st.divider()
-
-    st.markdown("#### :material/calendar_today: Age Range")
-    st.caption("Filter patients by age")
-
-    if "age" in df.columns and df["age"].notna().any():
-        a_min, a_max = int(np.nanmin(df["age"])), int(np.nanmax(df["age"]))
-        age_range = st.slider(
-            "", a_min, a_max, (a_min, a_max), label_visibility="collapsed"
-        )
-
-        col1, col2 = st.columns(2)
-        col1.metric("Min Age", age_range[0], delta=None)
-        col2.metric("Max Age", age_range[1], delta=None)
-    else:
-        age_range = None
+    origin_sel = origin_opts  # Select all origins
+    age_range = None  # No age filtering
 
 mask = pd.Series(True, index=df.index)
 if origin_sel and "origin" in df.columns:

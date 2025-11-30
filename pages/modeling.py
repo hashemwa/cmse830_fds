@@ -174,7 +174,8 @@ def preprocess_mice_origin_aware(
 df_raw = get_raw_data()
 
 # Sidebar configuration
-st.sidebar.subheader("Model Configuration")
+st.sidebar.markdown("### :material/tune: **Model Configuration**")
+st.sidebar.divider()
 
 missing_threshold = st.sidebar.slider(
     "Missingness Threshold",
@@ -186,12 +187,6 @@ missing_threshold = st.sidebar.slider(
 )
 
 unreliable_features = get_unreliable_features(df_raw, threshold=missing_threshold)
-
-drop_unreliable = st.sidebar.checkbox(
-    "Drop unreliable features",
-    value=True,
-    help=f"Auto-detected: {', '.join(unreliable_features) if unreliable_features else 'None'}",
-)
 
 test_size = st.sidebar.slider("Test Set Size", 0.1, 0.5, 0.2, 0.05)
 
@@ -242,10 +237,8 @@ all_features = [
 ]
 target_col = "target"
 
-if drop_unreliable:
-    feature_cols = [f for f in all_features if f not in unreliable_features]
-else:
-    feature_cols = all_features
+# Always drop unreliable features (>threshold missing in any origin)
+feature_cols = [f for f in all_features if f not in unreliable_features]
 
 available_features = [c for c in feature_cols if c in df_raw.columns]
 

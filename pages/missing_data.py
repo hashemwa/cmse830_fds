@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
-from analysis import missingness_heatmap, get_individual_raw_datasets
+from analysis import get_individual_raw_datasets
 
 df_raw_filtered = st.session_state.df_raw_filtered
 
@@ -53,52 +53,13 @@ if df_raw_filtered.isnull().values.any():
 
     st.subheader("Missingness Patterns by Origin")
     st.caption(
-        "This heatmap shows the percentage of missing values for each feature across different data sources."
+        "True missing rates including both explicit NaN values and 'fake zeros' that represent missing data"
     )
-
-    features = [
-        c
-        for c in [
-            "age",
-            "sex",
-            "cp",
-            "trestbps",
-            "chol",
-            "fbs",
-            "restecg",
-            "thalach",
-            "exang",
-            "oldpeak",
-            "slope",
-            "ca",
-            "thal",
-            "num",
-        ]
-        if c in df_raw_filtered.columns
-    ]
-
-    chart = missingness_heatmap(df_raw_filtered, features)
-    st.altair_chart(chart, use_container_width=True)
-
-    st.info(
-        "**Why this matters:** The missing data patterns prove that hospitals collected data in fundamentally different ways. "
-        "Some hospitals are missing entire features (like `ca` and `thal`) while others have complete data. "
-        "This isn't random. It tells us that hospitals used different equipment, ran different tests, and followed different protocols. "
-        "If we ignore these differences and just combine everything together, we're pretending four different hospitals are the same. "
-        "That's why a 'one size fits all' model trained on mixed data will fail when used at any single hospital.",
-        icon=":material/info:",
-    )
-
-    st.divider()
-
-    # ========== TRUE MISSING RATES (including hidden zeros) ==========
-    st.subheader("True Missing Rates")
-    st.markdown("*Detecting hidden missing values encoded as zeros*")
 
     st.warning(
         "**Important:** Some hospitals recorded missing values as `0` instead of leaving them blank. "
         "For clinical features like cholesterol and blood pressure, a value of 0 is **impossible** in living patients. "
-        "These 'fake zeros' must be treated as missing data.",
+        "These 'fake zeros' are treated as missing data in this analysis.",
         icon=":material/warning:",
     )
 
@@ -162,12 +123,7 @@ if df_raw_filtered.isnull().values.any():
     ).round(1)
     pivot_df = pivot_df[["Cleveland", "Hungary", "Long Beach VA", "Switzerland"]]
 
-    st.markdown("**True Missing Rates by Feature and Origin (%)**")
-    st.caption(
-        "Includes both explicit NaN values and 'fake zeros' that represent missing data"
-    )
-
-    # Create Altair heatmap (similar to missingness_heatmap)
+    # Create Altair heatmap
     heatmap_data = pivot_df.reset_index().melt(
         id_vars="Feature", var_name="Origin", value_name="Missing %"
     )
@@ -209,9 +165,18 @@ if df_raw_filtered.isnull().values.any():
 
     st.altair_chart(heatmap + text, use_container_width=True)
 
+    st.info(
+        "**Why this matters:** The missing data patterns prove that hospitals collected data in fundamentally different ways. "
+        "Some hospitals are missing entire features (like `ca` and `thal`) while others have complete data. "
+        "This isn't random. It tells us that hospitals used different equipment, ran different tests, and followed different protocols. "
+        "If we ignore these differences and just combine everything together, we're pretending four different hospitals are the same. "
+        "That's why a 'one size fits all' model trained on mixed data will fail when used at any single hospital.",
+        icon=":material/info:",
+    )
+
     st.divider()
 
-    # Feature reliability summary - improved UI
+    # Feature reliability summary
     st.subheader("Feature Reliability for Modeling")
     st.caption("Based on maximum missing rate across all origins (threshold: 50%)")
 
