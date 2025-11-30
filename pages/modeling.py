@@ -30,13 +30,14 @@ st.caption(
 
 with st.expander("About the Models", icon=":material/info:"):
     st.markdown("""
-    We compare **three approaches** to predict heart disease:
+    We compare **four approaches** to predict heart disease:
     
     | Model | What it does |
     |-------|-------------|
-    | **Global Logistic Regression** | One model for ALL patients. Assumes the same patterns work everywhere. |
-    | **Global Decision Tree** | One tree model that can find patterns like "if age > 55 AND chest pain type = 4 → high risk". |
-    | **Origin-Stratified** | Four SEPARATE models — one per hospital. Each patient uses their own hospital's model. |
+    | **Global Logistic Regression** | One linear model for ALL patients. Assumes the same patterns work everywhere. |
+    | **Global Decision Tree** | One tree model for ALL patients. Can find non-linear patterns like "if age > 55 AND chest pain = 4 → high risk". |
+    | **Stratified Logistic Regression** | Four SEPARATE linear models, one per hospital. Each patient uses their own hospital's model. |
+    | **Stratified Decision Tree** | Four SEPARATE tree models, one per hospital. |
     
     **The question:** Do hospitals share the same disease patterns, or are they too different?
     """)
@@ -368,39 +369,60 @@ with tab_global:
     )
 
 with tab_stratified:
-    st.markdown("**Separate Logistic Regression per Institution**")
-    st.caption("Training independent models for each origin...")
+    col_s1, col_s2 = st.columns(2)
 
-    origin_models = {}
-    origin_stats = []
+    with col_s1:
+        st.markdown("**Logistic Regression per Institution**")
+        st.caption("Training independent LR models for each origin...")
 
-    for origin in sorted(origins_train.unique()):
-        origin_mask_train = origins_train == origin
-        X_origin_train = X_train_imputed[origin_mask_train]
-        y_origin_train = y_train[origin_mask_train]
+        origin_models_lr = {}
+        origin_stats = []
 
-        if len(X_origin_train) > 10:
-            model = Pipeline(
-                [
-                    ("scaler", StandardScaler()),
-                    (
-                        "classifier",
-                        LogisticRegression(max_iter=1000, random_state=random_state),
-                    ),
-                ]
-            )
-            model.fit(X_origin_train, y_origin_train)
-            origin_models[origin] = model
-            origin_stats.append(
-                {"Origin": origin, "Training Samples": len(X_origin_train)}
-            )
+        for origin in sorted(origins_train.unique()):
+            origin_mask_train = origins_train == origin
+            X_origin_train = X_train_imputed[origin_mask_train]
+            y_origin_train = y_train[origin_mask_train]
 
-    stats_df = pd.DataFrame(origin_stats)
-    cols = st.columns(len(stats_df))
-    for idx, row in stats_df.iterrows():
-        cols[idx].metric(
-            row["Origin"], row["Training Samples"], delta="samples", delta_color="off"
-        )
+            if len(X_origin_train) > 10:
+                model = Pipeline(
+                    [
+                        ("scaler", StandardScaler()),
+                        (
+                            "classifier",
+                            LogisticRegression(
+                                max_iter=1000, random_state=random_state
+                            ),
+                        ),
+                    ]
+                )
+                model.fit(X_origin_train, y_origin_train)
+                origin_models_lr[origin] = model
+                origin_stats.append(
+                    {"Origin": origin, "Training Samples": len(X_origin_train)}
+                )
+
+        stats_df = pd.DataFrame(origin_stats)
+        for idx, row in stats_df.iterrows():
+            st.caption(f"{row['Origin']}: {row['Training Samples']} samples")
+
+    with col_s2:
+        st.markdown("**Decision Tree per Institution**")
+        st.caption("Training independent DT models for each origin...")
+
+        origin_models_dt = {}
+
+        for origin in sorted(origins_train.unique()):
+            origin_mask_train = origins_train == origin
+            X_origin_train = X_train_imputed[origin_mask_train]
+            y_origin_train = y_train[origin_mask_train]
+
+            if len(X_origin_train) > 10:
+                model = DecisionTreeClassifier(max_depth=5, random_state=random_state)
+                model.fit(X_origin_train, y_origin_train)
+                origin_models_dt[origin] = model
+
+        for origin in sorted(origin_models_dt.keys()):
+            st.caption(f"{origin}: Max Depth = 5")
 
 st.divider()
 
@@ -413,25 +435,47 @@ y_prob_lr = global_lr.predict_proba(X_test_imputed)[:, 1]
 y_pred_dt = global_dt.predict(X_test_imputed)
 y_prob_dt = global_dt.predict_proba(X_test_imputed)[:, 1]
 
-y_pred_stratified = []
-y_prob_stratified = []
+# Stratified Logistic Regression predictions
+y_pred_stratified_lr = []
+y_prob_stratified_lr = []
 
 for idx in range(len(X_test_imputed)):
     origin = origins_test.iloc[idx]
     X_sample = X_test_imputed.iloc[[idx]]
 
-    if origin in origin_models:
-        pred = origin_models[origin].predict(X_sample)[0]
-        prob = origin_models[origin].predict_proba(X_sample)[0, 1]
+    if origin in origin_models_lr:
+        pred = origin_models_lr[origin].predict(X_sample)[0]
+        prob = origin_models_lr[origin].predict_proba(X_sample)[0, 1]
     else:
         pred = global_lr.predict(X_sample)[0]
         prob = global_lr.predict_proba(X_sample)[0, 1]
 
-    y_pred_stratified.append(pred)
-    y_prob_stratified.append(prob)
+    y_pred_stratified_lr.append(pred)
+    y_prob_stratified_lr.append(prob)
 
-y_pred_stratified = pd.Series(y_pred_stratified, index=X_test_imputed.index)
-y_prob_stratified = pd.Series(y_prob_stratified, index=X_test_imputed.index)
+y_pred_stratified_lr = pd.Series(y_pred_stratified_lr, index=X_test_imputed.index)
+y_prob_stratified_lr = pd.Series(y_prob_stratified_lr, index=X_test_imputed.index)
+
+# Stratified Decision Tree predictions
+y_pred_stratified_dt = []
+y_prob_stratified_dt = []
+
+for idx in range(len(X_test_imputed)):
+    origin = origins_test.iloc[idx]
+    X_sample = X_test_imputed.iloc[[idx]]
+
+    if origin in origin_models_dt:
+        pred = origin_models_dt[origin].predict(X_sample)[0]
+        prob = origin_models_dt[origin].predict_proba(X_sample)[0, 1]
+    else:
+        pred = global_dt.predict(X_sample)[0]
+        prob = global_dt.predict_proba(X_sample)[0, 1]
+
+    y_pred_stratified_dt.append(pred)
+    y_prob_stratified_dt.append(prob)
+
+y_pred_stratified_dt = pd.Series(y_pred_stratified_dt, index=X_test_imputed.index)
+y_prob_stratified_dt = pd.Series(y_prob_stratified_dt, index=X_test_imputed.index)
 
 
 def get_metrics(y_true, y_pred):
@@ -447,7 +491,8 @@ metrics_df = pd.DataFrame(
     {
         "Global Logistic": get_metrics(y_test, y_pred_lr),
         "Global Decision Tree": get_metrics(y_test, y_pred_dt),
-        "Origin-Stratified": get_metrics(y_test, y_pred_stratified),
+        "Stratified Logistic": get_metrics(y_test, y_pred_stratified_lr),
+        "Stratified Decision Tree": get_metrics(y_test, y_pred_stratified_dt),
     }
 ).T
 
@@ -467,7 +512,8 @@ roc_data = []
 models_roc = [
     (y_prob_lr, "Global Logistic"),
     (y_prob_dt, "Global Decision Tree"),
-    (y_prob_stratified, "Origin-Stratified"),
+    (y_prob_stratified_lr, "Stratified Logistic"),
+    (y_prob_stratified_dt, "Stratified Decision Tree"),
 ]
 
 for probs, name in models_roc:
@@ -513,8 +559,10 @@ for origin in sorted(origins_test.unique()):
 
         acc_lr = accuracy_score(y_sub, global_lr.predict(X_sub))
         acc_dt = accuracy_score(y_sub, global_dt.predict(X_sub))
-        y_pred_strat_sub = y_pred_stratified[mask]
-        acc_strat = accuracy_score(y_sub, y_pred_strat_sub)
+        y_pred_strat_lr_sub = y_pred_stratified_lr[mask]
+        y_pred_strat_dt_sub = y_pred_stratified_dt[mask]
+        acc_strat_lr = accuracy_score(y_sub, y_pred_strat_lr_sub)
+        acc_strat_dt = accuracy_score(y_sub, y_pred_strat_dt_sub)
 
         origin_comparison.append(
             {
@@ -522,7 +570,8 @@ for origin in sorted(origins_test.unique()):
                 "Samples": mask.sum(),
                 "Global LR": acc_lr,
                 "Global DT": acc_dt,
-                "Stratified": acc_strat,
+                "Stratified LR": acc_strat_lr,
+                "Stratified DT": acc_strat_dt,
             }
         )
 
@@ -530,7 +579,7 @@ comp_df = pd.DataFrame(origin_comparison)
 
 comp_long = comp_df.melt(
     id_vars=["Origin", "Samples"],
-    value_vars=["Global LR", "Global DT", "Stratified"],
+    value_vars=["Global LR", "Global DT", "Stratified LR", "Stratified DT"],
     var_name="Model",
     value_name="Accuracy",
 )
@@ -635,8 +684,9 @@ def get_cm_data(y_true, y_pred, model_name):
 
 cm_data = (
     get_cm_data(y_test, y_pred_lr, "Global Logistic")
-    + get_cm_data(y_test, y_pred_dt, "Decision Tree")
-    + get_cm_data(y_test, np.array(y_pred_stratified), "Origin-Stratified")
+    + get_cm_data(y_test, y_pred_dt, "Global Decision Tree")
+    + get_cm_data(y_test, np.array(y_pred_stratified_lr), "Stratified Logistic")
+    + get_cm_data(y_test, np.array(y_pred_stratified_dt), "Stratified Decision Tree")
 )
 cm_df = pd.DataFrame(cm_data)
 
@@ -740,7 +790,8 @@ st.caption("Which model performed best overall?")
 
 acc_global_lr = metrics_df.loc["Global Logistic", "Accuracy"]
 acc_global_dt = metrics_df.loc["Global Decision Tree", "Accuracy"]
-acc_stratified = metrics_df.loc["Origin-Stratified", "Accuracy"]
+acc_stratified_lr = metrics_df.loc["Stratified Logistic", "Accuracy"]
+acc_stratified_dt = metrics_df.loc["Stratified Decision Tree", "Accuracy"]
 
 # Create a simple comparison table
 comparison_data = pd.DataFrame(
@@ -748,13 +799,19 @@ comparison_data = pd.DataFrame(
         "Model": [
             "Global Logistic Regression",
             "Global Decision Tree",
-            "Origin-Stratified",
+            "Stratified Logistic Regression",
+            "Stratified Decision Tree",
         ],
-        "Accuracy": [acc_global_lr, acc_global_dt, acc_stratified],
+        "Accuracy": [
+            acc_global_lr,
+            acc_global_dt,
+            acc_stratified_lr,
+            acc_stratified_dt,
+        ],
     }
 ).sort_values("Accuracy", ascending=False)
 
-comparison_data["Rank"] = ["Best", "Second", "Third"][: len(comparison_data)]
+comparison_data["Rank"] = ["1st", "2nd", "3rd", "4th"][: len(comparison_data)]
 comparison_data = comparison_data[["Rank", "Model", "Accuracy"]]
 
 st.dataframe(
@@ -766,7 +823,7 @@ st.dataframe(
 st.divider()
 
 best_model = metrics_df["Accuracy"].idxmax()
-acc_diff = acc_stratified - acc_global_lr
+acc_diff = acc_stratified_lr - acc_global_lr
 
 st.success(f"### :material/workspace_premium: Best Performing Approach: {best_model}")
 
@@ -774,7 +831,7 @@ st.success(f"### :material/workspace_premium: Best Performing Approach: {best_mo
 switzerland_insight = ""
 for row in origin_comparison:
     if row["Origin"] == "Switzerland":
-        swiss_strat = row.get("Stratified", 0)
+        swiss_strat = row.get("Stratified LR", 0)
         swiss_global = row.get("Global LR", 0)
         if swiss_strat > swiss_global + 0.1:  # >10% better
             switzerland_insight = f"""
