@@ -77,6 +77,7 @@ Every analysis page reveals origin-specific patterns: - **Distributions**: Diffe
 -   Identified origin-specific missing patterns (`ca`, `chol`)
 -   Preserved zeros for ca and chol columns to maintain data authenticity and reveal institutional differences
 -   Missing data rates vary by origin (evidence of different protocols)
+-   Hidden missing values (e.g., all zeros) identified and treated accordingly
 
 ### 4. Imputation Strategy
 
@@ -121,6 +122,8 @@ Built an interactive dashboard using **Streamlit 1.50** with horizontal navigati
 **Data Cleaning** - **Imputation**: Side-by-side comparison of Simple vs KNN imputation methods with distribution preservation analysis - **Encoding**: Labels mapped to numeric codes for interpretability
 
 **Exploratory Data Analysis** - **Distributions**: Interactive KDE plots comparing feature distributions across origins - **Relationships**: Age-heart rate scatter with LOESS trends and correlation heatmaps by origin - **Categories**: Stacked bar charts showing categorical feature distributions - **Prevalence**: Heart disease rates by origin revealing base rate differences
+
+**Modeling & Thesis validation** - Global vs Stratified models (Logistic Regression and Decision Trees) with performance metrics, ROC curves, and confusion matrices broken down by origin
 
 **Data Export** - Preview of filtered/cleaned data and CSV download functionality with applied filters
 
@@ -279,18 +282,15 @@ The app will open in your default browser at `http://localhost:8501`
 
 1. **Global Logistic Regression** - Linear baseline trained on all origins combined
 2. **Global Decision Tree** - Non-linear model (max_depth=5) trained on all origins
-3. **Origin-Stratified Logistic Regression** - Separate models trained per institution
+3. **Stratified Logistic Regression** - Separate LR models trained per institution
+4. **Stratified Decision Tree** - Separate DT models trained per institution
 
 ### Evaluation Metrics
 
 - **Accuracy, Precision, Recall, F1-Score** - Standard classification metrics
 - **ROC-AUC** - Area under the receiver operating characteristic curve
-- **5-Fold Stratified Cross-Validation** - Robust accuracy estimation
 - **Per-Origin Performance Breakdown** - Tests generalization across institutions
-
-### Key Finding
-
-After removing unreliable features (ca, thal, slope, fbs, chol), all three modeling approaches achieve similar accuracy (~75-80%). This suggests that institutional differences were primarily in **data collection practices** rather than underlying disease patterns. The 8 reliable features (age, sex, cp, trestbps, restecg, thalach, exang, oldpeak) are consistent enough across institutions for a global model to generalize.
+- **Confusion Matrices** - Visual comparison of prediction errors
 
 ------------------------------------------------------------------------
 
