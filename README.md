@@ -4,7 +4,7 @@
 
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.46+-FF4B4B?logo=streamlit)](https://streamlit.io/) [![Python](https://img.shields.io/badge/Python-3.9+-3776AB?logo=python)](https://www.python.org/)
 
-> *"One Size Fits All" Is False: Why heart disease prediction requires understanding institutional differences*
+> *"One Size Fits All" Isn't The Most Effective: Why heart disease prediction requires understanding institutional differences*
 
 ------------------------------------------------------------------------
 

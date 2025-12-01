@@ -10,7 +10,7 @@ from analysis import get_clean_data
 
 # Setup
 st.title("Thesis Validation")
-st.markdown("### Evidence: Why 'One Size Fits All' Fails")
+st.markdown("### Evidence: Why 'One Size Fits All' Isn't Optimal")
 
 # Load the fully imputed/clean data for this experiment
 # (We use the clean data here to focus on feature selection/population effects rather than imputation mechanics)

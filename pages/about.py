@@ -6,7 +6,7 @@ df = st.session_state.df
 st.title(
     "Heart Disease EDA",
 )
-st.markdown("*One Size ≠ Fits All — Multi-Source Analysis*")
+st.markdown("*Why Hospital-Specific Models Matter — Multi-Source Analysis*")
 
 st.subheader("Dataset Summary")
 col1, col2, col3, col4 = st.columns(4)

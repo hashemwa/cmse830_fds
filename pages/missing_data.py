@@ -170,7 +170,7 @@ if df_raw_filtered.isnull().values.any():
         "Some hospitals are missing entire features (like `ca` and `thal`) while others have complete data. "
         "This isn't random. It tells us that hospitals used different equipment, ran different tests, and followed different protocols. "
         "If we ignore these differences and just combine everything together, we're pretending four different hospitals are the same. "
-        "That's why a 'one size fits all' model trained on mixed data will fail when used at any single hospital.",
+        "That's why a 'one size fits all' approach may miss hospital-specific patterns.",
         icon=":material/info:",
     )
 
