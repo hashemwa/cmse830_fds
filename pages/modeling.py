@@ -259,6 +259,31 @@ col2.metric("Raw Samples", len(X))
 col3.metric("Test Size", f"{test_size:.0%}")
 col4.metric("Origins", origins.nunique())
 
+with st.expander("Why not model on fully imputed data?", icon=":material/help:"):
+    st.markdown("""
+    **The Problem with Imputing Highly-Missing Features:**
+    
+    When 60-100% of values are missing, imputation doesn't "recover" real data. It just **fabricates** values 
+    based on patterns from other features. This creates serious problems:
+    
+    1. **Reasoning:** If we impute `chol` (100% missing in Switzerland) using `age`, `trestbps`, 
+       and `thalach`, then use that imputed `chol` to predict heart disease, we're not learning anything 
+       new. We're just adding noise that's derived from features we already have.
+    
+    2. **False confidence:** The model appears to have more information than it actually does. 
+       A model using 13 features looks more robust than one using 8, but if 5 of those features 
+       are mostly fabricated, the extra "features" add no real predictive value.
+    
+    3. **Bias:** Imputation assumes data is Missing At Random (MAR). But when an entire 
+       hospital didn't collect a test (e.g., fluoroscopy in Hungary), it's Missing Not At Random (MNAR). Imputing these values incorrectly produces biased estimates that mislead the model.
+    
+    4. **Reduced interpretability:** If the model says "high cholesterol increases risk," but 40% of 
+       cholesterol values were imputed, that finding is unreliable and potentially misleading/dangerous for clinical use.
+    
+    **Our approach:** Drop features with >50% missing in any origin, then impute the remaining 
+    moderate missingness. This ensures the model learns from real measurements, not fabricated data.
+    """)
+
 # ========== TRAIN/TEST SPLIT FIRST ==========
 X_train, X_test, y_train, y_test, origins_train, origins_test = train_test_split(
     X, y, origins, test_size=test_size, random_state=random_state, stratify=y
