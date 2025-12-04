@@ -165,13 +165,22 @@ st.divider()
 st.subheader("Feature Scaling")
 st.caption("Standardization applied during model training via sklearn Pipeline")
 
-st.markdown("""
-**StandardScaler** transforms features to have:
-- **Mean = 0** (centered)
-- **Standard Deviation = 1** (normalized)
-
-This is critical for Logistic Regression which uses gradient-based optimization.
-""")
+with st.expander(
+    "Why do we need feature scaling?", icon=":material/help:", expanded=True
+):
+    st.markdown("""
+    **The problem:** Features have vastly different scales:
+    - `age`: 29-77 (range ~50)
+    - `trestbps`: 94-200 (range ~100)  
+    - `oldpeak`: 0-6.2 (range ~6)
+    
+    **Why it matters:** Logistic Regression adjusts "weights" for each feature to find the best 
+    decision boundary. If `trestbps` has values in the hundreds while `oldpeak` is in single digits, 
+    the model might incorrectly assume `trestbps` is more important just because its numbers are bigger.
+    
+    **What StandardScaler does:** Transforms each feature to have Mean=0 and Std=1, putting all 
+    features on the same scale so the model can fairly compare their importance.
+    """)
 
 num_features = ["age", "trestbps", "thalach", "oldpeak"]
 available_num = [f for f in num_features if f in dfv.columns]
@@ -210,6 +219,12 @@ st.divider()
 
 st.subheader("Derived Features")
 st.caption("Additional feature engineering techniques demonstrated")
+
+st.info(
+    "**Note:** These derived features are shown for educational purposes to demonstrate feature engineering concepts. "
+    "They are **not used** in the final models on the Modeling page, which rely only on the original reliable features.",
+    icon=":material/info:",
+)
 
 derived_features = pd.DataFrame(
     {
@@ -252,40 +267,10 @@ if "age" in dfv.columns and "thalach" in dfv.columns:
 
 st.divider()
 
-st.subheader("Feature Selection for Modeling")
-st.caption("Features categorized based on data quality analysis")
-
-col1, col2 = st.columns(2)
-
-with col1:
-    st.success("**Reliable Features (Used)**")
-    st.markdown("""
-- `age` - Patient age
-- `sex` - Biological sex
-- `cp` - Chest pain type
-- `trestbps` - Resting blood pressure
-- `restecg` - Resting ECG results
-- `thalach` - Maximum heart rate
-- `exang` - Exercise-induced angina
-- `oldpeak` - ST depression
-""")
-
-with col2:
-    st.error("**Unreliable Features (Excluded)**")
-    st.markdown("""
-- `ca` - 95-99% missing in 3/4 origins
-- `thal` - 42-90% missing in 3/4 origins
-- `slope` - 51-65% missing in 2/4 origins
-- `fbs` - 61% missing in Switzerland
-- `chol` - 100% missing in Switzerland (recorded as zeros)
-""")
-
-st.divider()
-
 st.info(
     "**Why this matters:** Feature engineering is where domain knowledge meets data science. "
     "By understanding what each clinical measurement means and how it was collected, "
-    "we can create better features and avoid using unreliable data. "
-    "The transformations documented here ensure reproducibility and transparency.",
+    "we can create better features and make informed decisions about data quality. "
+    "See the **Missing Data** page for details on which features are excluded from modeling.",
     icon=":material/info:",
 )

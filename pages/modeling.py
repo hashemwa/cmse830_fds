@@ -259,7 +259,9 @@ col2.metric("Raw Samples", len(X))
 col3.metric("Test Size", f"{test_size:.0%}")
 col4.metric("Origins", origins.nunique())
 
-with st.expander("Why not model on fully imputed data?", icon=":material/help:"):
+with st.expander(
+    "Why not model on fully imputed data?", icon=":material/help:", expanded=True
+):
     st.markdown("""
     **The Problem with Imputing Highly-Missing Features:**
     
