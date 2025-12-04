@@ -4,7 +4,7 @@ dfv = st.session_state.dfv
 df = st.session_state.df
 
 st.title(
-    "Heart Disease EDA",
+    "Heart Disease Analysis Across Multiple Hospitals",
 )
 st.markdown("*Why Hospital-Specific Models Matter — Multi-Source Analysis*")
 
