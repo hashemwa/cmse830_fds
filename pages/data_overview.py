@@ -9,13 +9,6 @@ age_range = st.session_state.age_range
 st.title("Data Overview")
 st.markdown("*Exploring Individual Datasets Before Combination*")
 
-st.warning(
-    "**Data Quality Note:** Some hospitals recorded missing values as zeros instead of leaving them blank. "
-    "For example, `chol` (cholesterol) = 0 for all Switzerland patients, and some Long Beach VA patients have `chol` = 0 or `trestbps` = 0. "
-    "Since these values are clinically impossible, they are treated as missing data and converted to NaN before analysis.",
-    icon=":material/warning:",
-)
-
 with st.expander("Feature Descriptions & Encoding", icon=":material/info:"):
     st.markdown("""
     ### :material/settings: Derived Variables

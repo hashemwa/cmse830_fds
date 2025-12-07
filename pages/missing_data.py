@@ -168,9 +168,9 @@ if df_raw_filtered.isnull().values.any():
     st.info(
         "**Why this matters:** The missing data patterns prove that hospitals collected data in fundamentally different ways. "
         "Some hospitals are missing entire features (like `ca` and `thal`) while others have complete data. "
-        "This isn't random. It tells us that hospitals used different equipment, ran different tests, and followed different protocols. "
-        "If we ignore these differences and just combine everything together, we're pretending four different hospitals are the same. "
-        "That's why a 'one size fits all' approach may miss hospital-specific patterns.",
+        "This is **Missing Not At Random (MNAR)**, the missingness depends on the hospital's equipment and protocols, not chance. "
+        "Standard imputation methods assume data is Missing At Random (MAR), so they cannot reliably recover MNAR data. "
+        "That's why features with >50% missing in any origin are excluded from modeling entirely.",
         icon=":material/info:",
     )
 

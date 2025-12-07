@@ -6,7 +6,7 @@ df = st.session_state.df
 st.title(
     "Heart Disease Analysis Across Multiple Hospitals",
 )
-st.markdown("*Why Hospital-Specific Models Matter — Multi-Source Analysis*")
+st.markdown("*Why Hospital-Specific Models Matter*")
 
 st.subheader("Dataset Summary")
 col1, col2, col3, col4 = st.columns(4)
@@ -87,10 +87,15 @@ with st.expander("Methodology", icon=":material/science:"):
     - Added descriptive labels for categorical variables
     - Generated `origin` identifier for each dataset source
     
-    ### Analysis Focus
+    **4. Exploratory Data Analysis**
+    - Compared feature distributions across origins using KDE plots
+    - Examined correlation structures per-origin with heatmaps
+    - Analyzed categorical feature distributions and prevalence rates
     
-    This EDA investigates whether patterns in heart disease indicators are **consistent across origins** 
-    or if there are **significant differences** that would affect model generalization.
+    **5. Modeling**
+    - Trained global models (Logistic Regression, Decision Tree) on all data
+    - Trained stratified models (one per origin) to test hospital-specific patterns
+    - Evaluated with accuracy, F1, ROC-AUC, and cross-validation
     """)
 
 with st.expander("How to Use This App", icon=":material/explore:"):
@@ -99,9 +104,10 @@ with st.expander("How to Use This App", icon=":material/explore:"):
     
     Use the **top navigation bar** to explore different analysis sections:
     - **Initial Data Analysis**: Raw data overview and missing data patterns
-    - **Data Cleaning**: Imputation comparison and feature encoding
+    - **Data Cleaning**: Imputation comparison and feature engineering
     - **Exploratory Data Analysis**: Distributions, relationships, categories, and prevalence
-    - **Download**: Export filtered data for your own analysis
+    - **Modeling**: Model development and thesis validation
+    - **Data Export**: Download filtered data for your own analysis
 
     ### :material/tune: Filters (Sidebar)
 
@@ -110,12 +116,14 @@ with st.expander("How to Use This App", icon=":material/explore:"):
     
     All visualizations and statistics update automatically based on your selections.
     
+    *Note: Modeling pages use all data (ignoring filters) to ensure proper train/test splitting.*
+    
     ### :material/lightbulb_2: Tips
     
     - Start with **Data Overview** to understand the raw data structure
-    - Review **Imputation** to see how missing values were handled
+    - Review **Missing Data** to see origin-specific missingness patterns
     - Explore **Distributions** to see how variables differ across origins
-    - Check **Prevalence** to understand disease rates by demographic factors
+    - Check **Model Development** to compare global vs stratified approaches
     """)
 
 st.divider()

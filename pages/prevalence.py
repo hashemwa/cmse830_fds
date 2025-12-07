@@ -27,9 +27,9 @@ if {"origin", "target"}.issubset(dfv.columns) and dfv["target"].notna().any():
 
     st.info(
         "**Why this matters:** The percentage of patients with heart disease varies dramatically between hospitals (this is called the 'base rate'). "
-        "A model trained at one hospital will consistently get predictions wrong at another hospital because it expects a different disease rate. "
+        "A model trained at one hospital may get predictions wrong at another hospital because it expects a different disease rate. "
         "For example, if you train a model at a specialty clinic where 54% have heart disease, it will predict way too many cases "
-        "when used at a general hospital where only 20% have the disease. This is a fundamental problem in medical AI. "
+        "when used at a general hospital where only 20% have the disease. "
         "We either need separate models for each hospital type, or we need to adjust predictions based on the local disease rate.",
         icon=":material/info:",
     )

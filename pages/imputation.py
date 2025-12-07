@@ -190,7 +190,7 @@ for idx, (dataset_name, tab) in enumerate(zip(raw_datasets.keys(), tabs)):
                     st.altair_chart(chart, use_container_width=True)
                     st.caption(
                         "Note: Higher missingness leads to greater distribution shift. "
-                        "Long Beach VA (~28% missing) shows more distortion than Cleveland (~0% missing)."
+                        "Long Beach VA (~29% missing) shows more distortion than Cleveland (~0% missing)."
                     )
                 except Exception:
                     st.warning(

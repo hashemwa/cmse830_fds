@@ -310,7 +310,7 @@ with st.expander("Why split before imputation?", icon=":material/help:"):
     - The model would appear better than it actually is
     
     **Our approach:** Fit the imputer on training data only, then apply it to both sets.
-    This keeps the test set truly "unseen" for fair evaluation.
+    This keeps the test set truly unseen for fair evaluation.
     """)
 
 with st.spinner(f"Applying origin-aware {imputation_method} imputation..."):
@@ -552,7 +552,14 @@ for probs, name in models_roc:
 
 roc_df = pd.concat(roc_data)
 
-roc_chart = (
+hover = alt.selection_point(
+    fields=["FPR"],
+    nearest=True,
+    on="mouseover",
+    empty=False,
+)
+
+roc_lines = (
     alt.Chart(roc_df)
     .mark_line(size=3)
     .encode(
@@ -560,8 +567,32 @@ roc_chart = (
         y=alt.Y("TPR:Q", title="True Positive Rate"),
         color=alt.Color("Model:N", scale=alt.Scale(scheme="category10")),
     )
-    .properties(height=400)
 )
+
+roc_points = (
+    roc_lines.mark_point(size=80)
+    .encode(
+        opacity=alt.condition(hover, alt.value(1), alt.value(0)),
+        tooltip=[
+            alt.Tooltip("Model:N", title="Model"),
+            alt.Tooltip("FPR:Q", title="False Positive Rate", format=".3f"),
+            alt.Tooltip("TPR:Q", title="True Positive Rate", format=".3f"),
+        ],
+    )
+    .add_params(hover)
+)
+
+roc_rule = (
+    alt.Chart(roc_df)
+    .mark_rule(color="gray", strokeWidth=1)
+    .encode(
+        x="FPR:Q",
+        opacity=alt.condition(hover, alt.value(0.3), alt.value(0)),
+    )
+    .transform_filter(hover)
+)
+
+roc_chart = (roc_lines + roc_points + roc_rule).properties(height=400)
 
 diagonal = (
     alt.Chart(pd.DataFrame({"x": [0, 1], "y": [0, 1]}))
@@ -914,9 +945,9 @@ with st.expander(":material/checklist: Pipeline Summary", expanded=False):
     **Data Preprocessing Pipeline (No Leakage):**
     
     1. **Load raw data** - No pre-imputation
-    2. **Dynamic feature selection** - Dropped features with >{missing_threshold:.0%} missing
-    3. **Train/test split FIRST** - {1 - test_size:.0%}/{test_size:.0%} split
-    4. **Origin-aware {imputation_method} imputation** - Fitted on training only
+    2. **Feature selection** - Dropped features with >{missing_threshold:.0%} missing
+    3. **Train/test split** - {1 - test_size:.0%}/{test_size:.0%} split
+    4. **Origin-based {imputation_method} imputation** - Fitted on training only
     5. **Model training** - StandardScaler + Classifiers
     6. **Evaluation** - On held-out test set
     

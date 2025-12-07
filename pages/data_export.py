@@ -87,12 +87,6 @@ with col4:
 
 st.divider()
 
-st.warning(
-    "**Note:** Features with >50% missing data (ca, thal, slope, fbs, chol) are included in this export "
-    "but should be used with caution. These features are excluded from the modeling page due to unreliable imputation.",
-    icon=":material/warning:",
-)
-
 st.info(
     f"**What you can do with this data:** Use this cleaned dataset for your own machine learning projects, statistical analysis, "
     f"or visualizations. The missing values have been filled in using {method_name} imputation. "
